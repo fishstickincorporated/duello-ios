@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Duello bot play</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="/style.css?v=91"></head>
+<body><div id="bootError" style="display:none;position:fixed;top:12px;left:12px;right:12px;z-index:9999;background:#ffd166;color:#1a1d24;padding:12px;border-radius:10px;font-size:14px;line-height:1.4" onclick="this.style.display='none'"></div><div id="app">
+  <noscript><p style="color:#e8ecf1;text-align:center;padding:40px 20px">Duello needs JavaScript enabled to run. Turn JavaScript on in your browser settings and reload.</p></noscript>
+
+  <section id="homeScreen" class="screen hidden">
+    <img class="logo-img home-logo" src="/assets/logo.png" alt="DUELLO">
+    <div class="modes">
+      <button class="mode" id="playOnlineBtn"><span class="sym white"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-3 3-3 15 0 18M12 3c3 3 3 15 0 18"/></svg></span><span class="label">Play Online</span><span class="chev">›</span></button>
+      <button class="mode" id="playBotsBtn"><span class="sym white"><svg viewBox="0 0 24 24"><circle cx="12" cy="2.5" r="1.2" fill="#fff" stroke="none"/><path d="M12 4v2"/><rect x="3.5" y="9.5" width="2" height="4" rx="1" fill="#fff"/><rect x="18.5" y="9.5" width="2" height="4" rx="1" fill="#fff"/><rect x="5" y="6" width="14" height="13" rx="3" fill="#fff"/><rect x="8" y="10" width="2.5" height="2.5" fill="#3a3f4b" stroke="none"/><rect x="13.5" y="10" width="2.5" height="2.5" fill="#3a3f4b" stroke="none"/><rect x="10" y="14.5" width="4" height="1.5" fill="#3a3f4b" stroke="none"/></svg></span><span class="label">Play Bots</span><span class="chev">›</span></button>
+      <button class="mode" id="playFriendsBtn"><span class="sym white"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><path d="M2 20c0-3 2.7-5 6-5s6 2 6 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15 14.5c2.8 0 5 1.7 5 4.5"/></svg></span><span class="label">Play Friends</span><span class="chev">›</span></button>
+    </div>
+  </section>
+
+  <section id="botScreen" class="screen hidden">
+    <img class="logo-img home-logo" src="/assets/logo.png" alt="DUELLO">
+    <div class="bot-options">
+      <button class="bot-opt" id="competitiveBtn"><span class="sym white"><svg viewBox="0 0 24 24"><circle cx="12" cy="2.5" r="1.2" fill="#fff" stroke="none"/><path d="M12 4v2"/><rect x="3.5" y="9.5" width="2" height="4" rx="1" fill="#fff"/><rect x="18.5" y="9.5" width="2" height="4" rx="1" fill="#fff"/><rect x="5" y="6" width="14" height="13" rx="3" fill="#fff"/><rect x="8" y="10" width="2.5" height="2.5" fill="#3a3f4b" stroke="none"/><rect x="13.5" y="10" width="2.5" height="2.5" fill="#3a3f4b" stroke="none"/><rect x="10" y="14.5" width="4" height="1.5" fill="#3a3f4b" stroke="none"/></svg></span><span class="label-col"><span class="label">Competitive</span><span class="sub">Plays at your Elo.</span></span><span class="chev">›</span></button>
+      <button class="bot-opt" id="fishstickBtn"><span class="sym white"><svg viewBox="0 0 24 24"><ellipse cx="10" cy="12" rx="7" ry="5" fill="#fff" stroke="none"/><path d="M16 12 L21 8 L20 12 L21 16 Z" fill="#fff" stroke="none"/><circle cx="7" cy="10.5" r="1.2" fill="#3a3f4b" stroke="none"/></svg></span><span class="label-col"><span class="label">Fishstick</span><span class="sub">The official Duello engine.</span></span><span class="chev">›</span></button>
+    </div>
+    <button class="back-pill" id="botBackBtn">← Back</button>
+  </section>
+
+  <section id="friendsScreen" class="screen hidden">
+    <div class="search-wrap">
+      <span class="search-icon"><svg viewBox="0 0 24 24" width="18" height="18"><circle cx="11" cy="11" r="7" fill="none" stroke="#b3b2b1" stroke-width="2"/><path d="M16 16 L21 21" stroke="#b3b2b1" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <input id="friendSearch" type="text" placeholder="Search players" autocomplete="off">
+    </div>
+    <div id="friendSearchResults" class="search-results"></div>
+    <div id="challengeRequests" class="requests"></div>
+    <div id="friendRequests" class="requests"></div>
+    <div class="leaderboard-head">
+      <span class="leaderboard-label">LEADERBOARD</span>
+      <button class="pencil" id="friendsPencil" title="Delete friends"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M16.5 4.5 L19.5 7.5 L8 19 L3 20 L4 15 Z" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7 L17 10" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="leaderboard-tabs">
+      <button class="lb-tab active" id="lbFriendsTab">Friends</button>
+      <button class="lb-tab" id="lbGlobalTab">Global</button>
+    </div>
+    <div id="leaderboardList" class="leaderboard"></div>
+    <div id="noFriendsCard" class="no-friends-card hidden">No friends yet…</div>
+  </section>
+
+  <section id="profileScreen" class="screen hidden">
+    <div class="profile-top">
+      <div class="pfp huge" id="profilePfp"></div>
+      <div class="profile-name" id="profileName"></div>
+      <div class="profile-username" id="profileUsername"></div>
+      <div class="profile-joined" id="profileJoined"></div>
+      <button class="gear-btn" id="gearBtn" title="Edit profile"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M10.5 4.5 L10.6 2.1 L13.4 2.1 L13.5 4.5 L16.2 5.7 L18.0 4.0 L20.0 6.0 L18.3 7.8 L19.5 10.5 L21.9 10.6 L21.9 13.4 L19.5 13.5 L18.3 16.2 L20.0 18.0 L18.0 20.0 L16.2 18.3 L13.5 19.5 L13.4 21.9 L10.6 21.9 L10.5 19.5 L7.8 18.3 L6.0 20.0 L4.0 18.0 L5.7 16.2 L4.5 13.5 L2.1 13.4 L2.1 10.6 L4.5 10.5 L5.7 7.8 L4.0 6.0 L6.0 4.0 L7.8 5.7 Z M 8.4 12.0 a 3.6 3.6 0 1 0 7.2 0 a 3.6 3.6 0 1 0 -7.2 0" fill="#b3b2b1" fill-rule="evenodd"/></svg></button>
+    </div>
+    <div class="elo-box">
+      <div class="elo-row">
+        <div><span class="elo-label">Elo</span><div class="elo-big" id="profileElo"></div></div>
+        <div><span class="elo-label">All-time high</span><div class="elo-big" id="profileEloHigh"></div></div>
+        <div><span class="elo-label">Global rank</span><div class="elo-big" id="profileGlobalRank"></div></div>
+      </div>
+      <div class="chart-toggles">
+        <button class="chart-toggle active" data-range="1m">1 month</button>
+        <button class="chart-toggle" data-range="1y">1 year</button>
+        <button class="chart-toggle" data-range="all">All time</button>
+      </div>
+      <canvas id="eloChart" width="340" height="110"></canvas>
+    </div>
+    <div class="stats-board">
+      <div class="stats-tabs">
+        <button class="stats-tab active" data-scope="aggregate">Aggregate</button>
+        <button class="stats-tab" data-scope="vsHumans">Vs Humans</button>
+        <button class="stats-tab" data-scope="vsBots">Vs Bots</button>
+      </div>
+      <div id="statsList" class="stats-list"></div>
+    </div>
+    <p class="small privacy-link"><a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p>
+  </section>
+
+  <section id="profileEditScreen" class="screen hidden">
+    <h1 class="auth-heading">Edit profile</h1>
+    <form id="profileEditForm" autocomplete="off">
+      <div class="edit-photo">
+        <div class="edit-pfp-wrap" id="editPfpWrap" title="Change photo">
+          <div class="pfp huge" id="editPfp"></div>
+          <span class="edit-pfp-pencil"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M16.5 4.5 L19.5 7.5 L8 19 L3 20 L4 15 Z" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7 L17 10" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        </div>
+        <input id="editPhotoInput" type="file" accept="image/*" class="hidden">
+        <button class="link hidden" id="editPhotoRemoveBtn" type="button">Remove photo</button>
+      </div>
+      <div class="edit-field"><label for="editFirstName">First name</label><input id="editFirstName" placeholder="First name" autocomplete="off"></div>
+      <div class="edit-field"><label for="editLastName">Last name</label><input id="editLastName" placeholder="Last name" autocomplete="off"></div>
+      <div class="edit-field"><label for="editUsername">Username</label><input id="editUsername" placeholder="Username" autocomplete="off"></div>
+      <div class="edit-field"><label for="editEmail">Email</label><input id="editEmail" type="email" placeholder="Email" autocomplete="off"></div>
+      <p id="editError" class="error"></p>
+      <div class="edit-actions">
+        <button class="btn cancel" type="button" id="editCancelBtn">Cancel</button>
+        <button class="btn primary" type="submit" id="editSaveBtn">Save</button>
+      </div>
+    </form>
+    <div class="edit-password">
+      <div id="editPasswordFields" class="hidden">
+        <div class="pw-wrap"><input id="editCurrentPassword" type="password" placeholder="Current password" autocomplete="off"><button class="pw-eye" type="button" data-target="editCurrentPassword" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+        <div class="pw-wrap"><input id="editNewPassword" type="password" placeholder="New password" autocomplete="off"><button class="pw-eye" type="button" data-target="editNewPassword" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+        <div class="pw-wrap"><input id="editNewPassword2" type="password" placeholder="New password again" autocomplete="off"><button class="pw-eye" type="button" data-target="editNewPassword2" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+        <ul class="pw-reqs" id="editPwReqs"><li data-req="len">At least 8 characters</li><li data-req="upper">A capital letter</li><li data-req="lower">A lowercase letter</li><li data-req="digit">A number</li></ul>
+        <button class="btn primary" id="editPasswordSaveBtn" type="button">Save new password</button>
+        <p id="editPasswordError" class="error"></p>
+        <p id="editPasswordDone" class="success"></p>
+      </div>
+      <button class="link" id="editPasswordBtn" type="button">Change password</button>
+    </div>
+    <button class="link" id="profileSignOutBtn">Sign out</button>
+    <div class="edit-delete">
+      <button class="link danger" id="editDeleteBtn" type="button">Delete account</button>
+      <div id="editDeleteConfirm" class="hidden">
+        <p class="small">This permanently deletes your account, games, Elo, and stats. This cannot be undone.</p>
+        <p id="editDeleteError" class="error"></p>
+        <div class="edit-actions">
+          <button class="btn cancel" type="button" id="editDeleteCancelBtn">Keep my account</button>
+          <button class="btn danger" type="button" id="editDeleteConfirmBtn">Yes, delete my account</button>
+        </div>
+      </div>
+    </div>
+    <p class="def-credit">Definitions via Wiktionary (CC BY-SA)</p>
+  </section>
+
+  <section id="authScreen" class="screen hidden">
+    <h1 class="auth-heading" id="authHeading">Sign in</h1>
+    <form id="authForm" autocomplete="off">
+      <input id="authEmail" type="email" placeholder="Email" autocomplete="off">
+      <div class="pw-wrap"><input id="authPassword" type="password" placeholder="Password" autocomplete="off"><button class="pw-eye" type="button" data-target="authPassword" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+      <p id="authError" class="error"></p>
+      <p id="authSuccess" class="success"></p>
+      <button class="btn primary" type="submit" id="authSubmitBtn">Sign in</button>
+      <button class="link" id="forgotPasswordBtn" type="button">Forgot password?</button>
+    </form>
+    <div id="signupSteps" class="hidden">
+      <div id="signupStepEmail">
+        <input id="suEmail" type="email" placeholder="Email" autocomplete="off">
+        <p id="suError" class="error"></p>
+        <button class="btn primary" id="suSendBtn" type="button">Send code</button>
+        <p>We will email you a 6-digit code.</p>
+      </div>
+      <div id="signupStepCode" class="hidden">
+        <p id="suSentMsg" class="success"></p>
+        <input id="suCode" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="off">
+        <p id="suError2" class="error"></p>
+        <button class="btn primary" id="suVerifyBtn" type="button">Verify</button>
+        <button class="link" id="suResendBtn" type="button">Send a new code</button>
+        <button class="link" id="suBackBtn" type="button">Use a different email</button>
+      </div>
+      <div id="signupStepProfile" class="hidden">
+        <input id="suFirstName" placeholder="First name">
+        <input id="suLastName" placeholder="Last name">
+        <input id="suUsername" placeholder="Username">
+        <div class="pw-wrap"><input id="suPassword" type="password" placeholder="Password" autocomplete="off"><button class="pw-eye" type="button" data-target="suPassword" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+        <ul class="pw-reqs" id="suPwReqs"><li data-req="len">At least 8 characters</li><li data-req="upper">A capital letter</li><li data-req="lower">A lowercase letter</li><li data-req="digit">A number</li></ul>
+        <p id="suError3" class="error"></p>
+        <button class="btn primary" id="suCreateBtn" type="button">Create account</button>
+      </div>
+    </div>
+    <div id="resetSteps" class="hidden">
+      <div id="resetStepEmail">
+        <input id="rpEmail" type="email" placeholder="Email" autocomplete="off">
+        <p id="rpError" class="error"></p>
+        <button class="btn primary" id="rpSendBtn" type="button">Send code</button>
+        <p>We will email you a 6-digit code if an account exists for that email.</p>
+      </div>
+      <div id="resetStepCode" class="hidden">
+        <p id="rpSentMsg" class="success"></p>
+        <input id="rpCode" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="off">
+        <p id="rpError2" class="error"></p>
+        <button class="btn primary" id="rpVerifyBtn" type="button">Verify</button>
+        <button class="link" id="rpResendBtn" type="button">Send a new code</button>
+        <button class="link" id="rpBackBtn" type="button">Use a different email</button>
+      </div>
+      <div id="resetStepPassword" class="hidden">
+        <div class="pw-wrap"><input id="rpPassword" type="password" placeholder="New password" autocomplete="off"><button class="pw-eye" type="button" data-target="rpPassword" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+        <div class="pw-wrap"><input id="rpPassword2" type="password" placeholder="New password again" autocomplete="off"><button class="pw-eye" type="button" data-target="rpPassword2" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+        <ul class="pw-reqs" id="rpPwReqs"><li data-req="len">At least 8 characters</li><li data-req="upper">A capital letter</li><li data-req="lower">A lowercase letter</li><li data-req="digit">A number</li></ul>
+        <p id="rpError3" class="error"></p>
+        <button class="btn primary" id="rpResetBtn" type="button">Set new password</button>
+      </div>
+    </div>
+    <button class="link" id="authToggleBtn">Need an account? Sign up</button>
+    <p class="small privacy-link"><a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p>
+  </section>
+
+  <section id="gameScreen" class="screen hidden">
+    <div id="gameDim">
+      <img class="logo-img small-logo-img" id="gameLogo" src="/assets/logo.png" alt="DUELLO">
+      <div class="scoreboard" id="scoreboard">
+        <div class="panel player-panel" id="playerPanel">
+          <div class="panel-top">
+          <div class="col identity-col"><div class="pfp no-photo">👤</div><div class="name" id="playerName">You</div><div class="elo" id="playerElo">1000</div></div>
+          <div class="col clock-col"><span class="clock" id="clockHuman">4:00</span><span class="game-score" id="scoreHuman">0</span></div>
+          </div>
+        </div>
+        <div class="panel bot-panel" id="botPanel">
+          <div class="panel-top">
+          <div class="col clock-col"><span class="clock" id="clockBot">4:00</span><span class="game-score" id="scoreBot">0</span></div>
+          <div class="col identity-col"><div class="pfp" id="botPfp">🤖</div><div class="name" id="botName">Bot</div><div class="elo" id="botElo">1000</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="lastplay" id="lastPlay"></div>
+      <div class="board-wrap"><div id="board" class="board"></div><div id="innerGlow" class="inner-glow"><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div></div><div id="countdownOverlay" class="countdown-overlay hidden"><div class="countdown-num" id="countdownNum">5</div></div></div>
+      <div id="status" class="status">Your move</div>
+      <div id="rack" class="rack"></div>
+      <div class="controls">
+        <button id="forfeitBtn">Forfeit</button><button id="passBtn">Pass</button>
+        <button id="playBtn" disabled>Play</button><button id="recallBtn">Recall</button><button id="shuffleBtn">Shuffle</button>
+      </div>
+      <div id="endButtons" class="controls hidden">
+        <button id="mainMenuBtn">Main Menu</button><button id="playAgainBtn">Play Again</button><button id="gameStatsBtn">Game Stats</button>
+      </div>
+    </div>
+    <div id="statWindow" class="stat-window hidden">
+      <div class="stat-winner" id="statWinner"></div>
+      <div class="stat-top"><div class="stat-pfp"><div class="pfp big no-photo">👤</div><div class="elo-move" id="eloMoveHuman">+0</div></div>
+      <div class="stat-score" id="statScore">0–0</div>
+      <div class="stat-pfp"><div class="pfp big" id="statBotPfp">🤖</div><div class="elo-move" id="eloMoveBot">+0</div></div></div>
+      <div class="stat-reason" id="statReason"></div>
+      <div class="stat-grid" id="statGrid"></div>
+      <div class="controls"><button id="statMainMenu">Main Menu</button><button id="statPlayAgain">Play Again</button></div>
+    </div>
+    <div id="defPopover" class="def-popover hidden"></div>
+    <div id="dragGhost" class="drag-ghost hidden"></div>
+  </section>
+
+  <section id="searchingScreen" class="screen hidden">
+    <img class="logo-img home-logo" src="/assets/logo.png" alt="DUELLO">
+    <div class="searching-box">
+      <div class="searching-dots"><span></span><span></span><span></span></div>
+      <div class="searching-text" id="searchingText">Searching for opponent…</div>
+      <button class="btn primary" id="searchCancelBtn">Cancel</button>
+    </div>
+  </section>
+
+  <section id="rematchScreen" class="screen hidden">
+    <img class="logo-img home-logo" src="/assets/logo.png" alt="DUELLO">
+    <div class="rematch-box">
+      <div class="rematch-text" id="rematchText">Request sent — waiting for your opponent to accept…</div>
+      <div class="controls hidden" id="rematchActions">
+        <button id="rematchHomeBtn">Back Home</button>
+        <button id="rematchNewBtn">Find a new opponent</button>
+      </div>
+    </div>
+  </section>
+
+  <nav id="tabBar" class="tab-bar hidden" aria-label="Main navigation">
+    <button class="tab-btn active" id="tabHome" aria-label="Home"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M3 11 L12 3 L21 11 L21 21 L14 21 L14 14 L10 14 L10 21 L3 21 Z" fill="#b3b2b1"/><rect x="10.5" y="16" width="3" height="5" fill="#03eaff"/></svg></button>
+    <button class="tab-btn" id="tabFriends" aria-label="Friends"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="8" cy="8" r="3" fill="#b3b2b1"/><circle cx="16" cy="8" r="3" fill="#03eaff"/><path d="M3 20 C3 16 5 14 8 14 C11 14 13 16 13 20 Z" fill="#b3b2b1"/><path d="M11 20 C11 16 13 14 16 14 C19 14 21 16 21 20 Z" fill="#03eaff"/></svg></button>
+    <button class="tab-btn" id="tabProfile" aria-label="Profile"><span id="tabProfileIcon"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="8" r="4" fill="#b3b2b1"/><path d="M4 21 C4 16 7 13 12 13 C17 13 20 16 20 21 Z" fill="#03eaff" opacity="0.85"/></svg></span></button>
+  </nav>
+  <div id="personModal" class="person-modal hidden"><div class="person-card"><button class="person-close" id="personCloseBtn" aria-label="Close profile">×</button><span class="person-pfp" id="personPfp"></span><div class="person-name" id="personName"></div><div class="person-user" id="personUser"></div><div class="person-elo">Elo <span id="personElo"></span></div><div class="person-rank">Global Rank <span id="personRank"></span></div><button class="person-add" id="personAddBtn"></button></div></div>
+  <div id="challengeModal" class="person-modal hidden"><div class="person-card"><span class="person-pfp" id="challengePfp"></span><div class="person-name" id="challengeName"></div><div class="person-user" id="challengeUser"></div><div class="challenge-actions"><button class="mini-btn" id="challengeAcceptBtn">Accept</button><button class="mini-btn grey" id="challengeDeclineBtn">Decline</button></div></div></div>
+</div>
+<script>
+(function () {
+  function show(msg) {
+    var box = document.getElementById('bootError');
+    if (box) { box.style.display = 'block'; box.textContent = msg; }
+  }
+  window.addEventListener('error', function (e) {
+    if (!e.message) return;
+    show('Error: ' + e.message + (e.filename ? ' @ ' + e.filename + ':' + e.lineno + ':' + e.colno : ''));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    show('Error: ' + (r && r.message ? r.message : String(r)));
+  });
+})();
+</script>
+<script src="/app.js?v=91" onerror="var b=document.getElementById('bootError');if(b){b.style.display='block';b.textContent='Duello code failed to load. Check your connection and reload.';}"></script></body></html>
