@@ -98,14 +98,175 @@ function show(id) {
   if ((id === 'homeScreen' || id === 'botScreen') && $('tabHome')) $('tabHome').classList.add('active');
   if (id === 'friendsScreen' && $('tabFriends')) $('tabFriends').classList.add('active');
   if ((id === 'profileScreen' || id === 'profileEditScreen') && $('tabProfile')) $('tabProfile').classList.add('active');
+  // First Home render warms the Profile + Leaderboard caches (below).
+  if (id === 'homeScreen') preloadHomeTabs();
 }
 function silhouetteSVG(size) { return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><circle cx="12" cy="8" r="4" fill="#b3b2b1"/><path d="M4 21 C4 16 7 13 12 13 C17 13 20 16 20 21 Z" fill="#b3b2b1"/></svg>`; }
 function pfpHTML(userLike) {
   if (userLike && userLike.photoData) return `<img src="${userLike.photoData}" alt="">`;
   return silhouetteSVG(36);
 }
+// A persona photo is a remote URL (randomuser.me / picsum): when it
+// fails to load, Safari paints its broken-image "?" inside the
+// circle instead of the silhouette. Any failed photo is swapped for
+// the inline silhouette, which cannot fail and cannot loop. Capture
+// phase: <img> errors do not bubble. Only photos are touched — the
+// logo and other images are left alone.
+document.addEventListener('error', (e) => {
+  const t = e.target;
+  if (!t || t.tagName !== 'IMG' || !t.closest) return;
+  const host = t.closest('.pfp, .lb-pfp, .person-pfp');
+  if (!host) return;
+  host.classList.add('no-photo');
+  t.outerHTML = silhouetteSVG(32);
+}, true);
+
+// ---------- First-open intro (v96) ----------
+// Black overlay, real logo starts zoomed in 3x, pulls back fast, sits
+// 2s, then zooms in fast to reveal Home. Plays once per device
+// (localStorage duello_intro_seen, set on finish or skip); tap the
+// overlay to skip. Behind it, 20 premium-colour squares flicker on/off
+// across the whole background, each jumping to a new grid cell per
+// cycle — never overlapping, never in neighbouring cells, same colour
+// kept further apart. WAAPI calls are guarded: the client harness runs
+// this file in a vm with no Element.animate, and the intro must never
+// kill the boot there (or on a browser without WAAPI).
+const INTRO_SEEN_KEY = 'duello_intro_seen';
+function introCellFree(occupied, col, row, ci) {
+  for (let dc = -2; dc <= 2; dc++) {
+    for (let dr = -2; dr <= 2; dr++) {
+      if (dc === 0 && dr === 0) continue;
+      const occ = occupied[(col + dc) + ',' + (row + dr)];
+      if (occ === undefined) continue;
+      const dist = Math.max(Math.abs(dc), Math.abs(dr));
+      if (dist === 1) return false;
+      if (dist === 2 && occ === ci) return false;
+    }
+  }
+  return true;
+}
+function introPlaceCell(el, ci, occupied) {
+  if (el._introCell) delete occupied[el._introCell];
+  let col = 0, row = 0, key = '0,0', tries = 0;
+  do {
+    col = Math.floor(Math.random() * 9);
+    row = Math.floor(Math.random() * 15);
+    key = col + ',' + row;
+    tries++;
+  } while ((occupied[key] !== undefined || !introCellFree(occupied, col, row, ci)) && tries < 300);
+  if (occupied[key] !== undefined || !introCellFree(occupied, col, row, ci)) {
+    let found = false;
+    for (let t = 0; t < 300 && !found; t++) {
+      col = Math.floor(Math.random() * 9);
+      row = Math.floor(Math.random() * 15);
+      key = col + ',' + row;
+      if (occupied[key] === undefined) found = true;
+    }
+    if (!found) { col = 0; row = 0; key = '0,0'; }
+  }
+  occupied[key] = ci; el._introCell = key;
+  el.style.left = (col * 11.1 + Math.random() * 2.5) + '%';
+  el.style.top = (row * 6.67 + Math.random() * 2) + '%';
+}
+function initIntro() {
+  const overlay = $('introOverlay');
+  if (!overlay) return;
+  if (storeGet(INTRO_SEEN_KEY)) { overlay.style.display = 'none'; return; }
+  const zoom = $('introLogoZoom');
+  const flicker = $('introFlicker');
+  const COLORS = ['255,19,3', '28,255,3', '255,3,238', '255,141,3'];
+  const occupied = {};
+  const anims = [];
+  let timers = [];
+  let started = false;
+  if (flicker) {
+    for (let k = 0; k < 20; k++) {
+      const ci = k % 4;
+      const s = document.createElement('div');
+      s.className = 'intro-cell';
+      s.style.background = 'rgb(' + COLORS[ci] + ')';
+      s.style.animationDuration = (2.2 + Math.random() * 2).toFixed(2) + 's';
+      s.style.animationDelay = (Math.random() * 2).toFixed(2) + 's';
+      s._introCi = ci;
+      introPlaceCell(s, ci, occupied);
+      s.addEventListener('animationiteration', function () { introPlaceCell(this, this._introCi, occupied); });
+      flicker.appendChild(s);
+    }
+  }
+  function finishIntro() {
+    started = true; // a late logo load must not restart the intro after a skip
+    try { storeSet(INTRO_SEEN_KEY, '1'); } catch {}
+    anims.forEach(a => { try { a.finish(); } catch {} });
+    timers.forEach(clearTimeout); timers = [];
+    overlay.style.display = 'none';
+  }
+  function playIntro() {
+    // The zoom-out is invisible if the logo image has not painted yet
+    // (the logo PNG is 2.6 MB and can still be downloading/decoding
+    // when app.js runs), so the zoom-out waits for the logo to load —
+    // with a 1.5s backstop so a slow or broken image never stalls the
+    // intro. The 2s sit and the zoom-in are timed from the zoom-out,
+    // not from page load.
+    function startZoomOut() {
+      if (started) return; started = true;
+      if (zoom && typeof zoom.animate === 'function') {
+        anims.push(zoom.animate([{ transform: 'scale(3)' }, { transform: 'scale(1)' }], { duration: 400, easing: 'cubic-bezier(.25,1.3,.35,1)', fill: 'both' }));
+      }
+      timers.push(setTimeout(() => {
+        if (zoom && typeof zoom.animate === 'function') {
+          anims.push(zoom.animate([{ transform: 'scale(1)' }, { transform: 'scale(8)' }], { duration: 650, easing: 'cubic-bezier(.5,0,.9,.4)', fill: 'forwards' }));
+        }
+        if (typeof overlay.animate === 'function') {
+          anims.push(overlay.animate([{ opacity: 1 }, { opacity: 0 }], { delay: 350, duration: 500, fill: 'forwards' }));
+        }
+      }, 2400));
+      timers.push(setTimeout(finishIntro, 3400));
+    }
+    const logo = $('introLogo');
+    if (logo && logo.complete === false) {
+      logo.addEventListener('load', startZoomOut, { once: true });
+      logo.addEventListener('error', startZoomOut, { once: true });
+      timers.push(setTimeout(startZoomOut, 1500));
+    } else {
+      startZoomOut();
+    }
+  }
+  overlay.addEventListener('click', finishIntro);
+  playIntro();
+}
+initIntro();
 function goTab(id) { show(id); }
 $('tabHome').onclick = () => show('homeScreen');
+
+// Profile + Leaderboard load in the background once Home first
+// renders, so both tabs are instant when tapped. Idle-scheduled so
+// Home stays responsive; the v74 load-once guards (profileData,
+// globalRows, serverFriends) still hold, so a later tap never
+// refetches — the preload only fills the same caches the tab taps
+// fill. Silent on failure: a failed preload leaves the caches empty
+// and the tab loads normally on tap. Never fires before the session
+// is ready (no token / no user yet): the flag is set when the
+// preload is scheduled, so a second Home render inside the idle
+// window cannot schedule it twice. A session check runs first,
+// because a rejected session inside renderProfileUI would bounce
+// the user to sign-in from a background load.
+let homeTabsPreloaded = false;
+function preloadHomeTabs() {
+  if (homeTabsPreloaded || !token || !me) return;
+  homeTabsPreloaded = true;
+  // Sequential on purpose: loadServerFriends pulls the Global rows
+  // in first, so a parallel ensureGlobalRows would see the cache
+  // still empty and fetch /api/leaderboard twice.
+  const run = async () => {
+    let d = null;
+    try { d = await api('/api/me'); } catch { return; }
+    try { await renderProfileUI(d); } catch {}
+    try { await ensureGlobalRows(); } catch {}
+    try { await loadServerFriends(); } catch {}
+  };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(() => { run(); }, { timeout: 2000 });
+  else setTimeout(() => { run(); }, 500);
+}
 
 // ---------- Friends tab ----------
 // The Global scope is real registered users, top by Elo, from GET
@@ -1042,7 +1203,7 @@ function renderGame() {
   $('botName').textContent = isFish ? 'Fishstick' : isPersonaGame ? (game.persona?.firstName || 'Player') : isHumanGame ? (game.opponent?.firstName || 'Player') : 'Bot';
   $('botElo').textContent = isFish ? '∞' : game.botElo;
   $('botElo').classList.toggle('inf', isFish);
-  if (isFish) $('botPfp').innerHTML = '<img src="/assets/fishstick.jpeg" alt="Fishstick">';
+  if (isFish) $('botPfp').innerHTML = '<img src="/assets/fishstick.png?v=1" alt="Fishstick">';
   else if (isPersonaGame && game.persona?.photoData) $('botPfp').innerHTML = `<img src="${game.persona.photoData}" alt="">`;
   else if (isHumanGame && game.opponent?.photoData) $('botPfp').innerHTML = `<img src="${game.opponent.photoData}" alt="">`;
   // A persona with no photo is a person without a photo, not a bot:
@@ -1053,6 +1214,7 @@ function renderGame() {
   else if (isHumanGame) $('botPfp').innerHTML = silhouetteSVG(32);
   else $('botPfp').textContent = '🤖';
   $('botPfp').classList.toggle('no-photo', (isPersonaGame && !game.persona?.photoData) || (isHumanGame && !game.opponent?.photoData));
+  $('botPfp').classList.toggle('clear-bg', isFish);
   document.querySelector('.player-panel').classList.toggle('active', game.status === 'active' && game.clocks.turn === 'human');
   document.querySelector('.bot-panel').classList.toggle('active', game.status === 'active' && game.clocks.turn === 'bot');
   $('scoreHuman').textContent = String(game.scores.human); $('scoreBot').textContent = String(game.scores.bot);
@@ -1936,21 +2098,22 @@ function showStatWindow(stats) {
   const best = (x) => x.best ? `${x.best.word} (<span class="num">${x.best.score} pts</span>)` : '—';
   const longest = (x) => x.longest ? `${x.longest.word} (<span class="num">${x.longest.word.length} letters</span>)` : '—';
   const opt = (x) => `${x.optimal}/${x.total}`;
-  const box = (name, pfp, st, noPhoto) => `<div class="stat-box"><div class="stat-box-head"><span class="pfp${noPhoto ? ' no-photo' : ''}">${pfp}</span><span class="stat-box-name">${name}</span></div><div><span class="stat-label">Best word:</span><br><span class="stat-val">${best(st)}</span></div><div><span class="stat-label">Longest word:</span><br><span class="stat-val">${longest(st)}</span></div><div><span class="stat-label">Optimal moves:</span><br><span class="stat-val num">${opt(st)}</span></div></div>`;
+  const box = (name, pfp, st, noPhoto, clearBg) => `<div class="stat-box"><div class="stat-box-head"><span class="pfp${noPhoto ? ' no-photo' : ''}${clearBg ? ' clear-bg' : ''}">${pfp}</span><span class="stat-box-name">${name}</span></div><div><span class="stat-label">Best word:</span><br><span class="stat-val">${best(st)}</span></div><div><span class="stat-label">Longest word:</span><br><span class="stat-val">${longest(st)}</span></div><div><span class="stat-label">Optimal moves:</span><br><span class="stat-val num">${opt(st)}</span></div></div>`;
   const humanPfp = (() => { try { return pfpHTML(me); } catch { return ''; } })();
   // A persona with no photo gets the silhouette in the stat box and
   // the top pfp too (same reasoning as the scoreboard: a person
   // without a photo, not Competitive Bot).
-  const botPfpBox = game.botType === 'fishstick' ? '<img src="/assets/fishstick.jpeg" alt="Fishstick">' : isPersonaGame && game.persona?.photoData ? `<img src="${game.persona.photoData}" alt="">` : isHumanGame && game.opponent?.photoData ? `<img src="${game.opponent.photoData}" alt="">` : isPersonaGame || isHumanGame ? silhouetteSVG(36) : '🤖';
+  const botPfpBox = game.botType === 'fishstick' ? '<img src="/assets/fishstick.png?v=1" alt="Fishstick">' : isPersonaGame && game.persona?.photoData ? `<img src="${game.persona.photoData}" alt="">` : isHumanGame && game.opponent?.photoData ? `<img src="${game.opponent.photoData}" alt="">` : isPersonaGame || isHumanGame ? silhouetteSVG(36) : '🤖';
   const botNoPhoto = (isPersonaGame && !game.persona?.photoData) || (isHumanGame && !game.opponent?.photoData);
-  $('statGrid').innerHTML = box(humanLabel, humanPfp, stats.human, !(me && me.photoData)) + box(botLabel, botPfpBox, stats.bot, botNoPhoto);
-  if (game.botType === 'fishstick') $('statBotPfp').innerHTML = '<img src="/assets/fishstick.jpeg" alt="Fishstick">';
+  $('statGrid').innerHTML = box(humanLabel, humanPfp, stats.human, !(me && me.photoData)) + box(botLabel, botPfpBox, stats.bot, botNoPhoto, game.botType === 'fishstick');
+  if (game.botType === 'fishstick') $('statBotPfp').innerHTML = '<img src="/assets/fishstick.png?v=1" alt="Fishstick">';
   else if (isPersonaGame && game.persona?.photoData) $('statBotPfp').innerHTML = `<img src="${game.persona.photoData}" alt="">`;
   else if (isHumanGame && game.opponent?.photoData) $('statBotPfp').innerHTML = `<img src="${game.opponent.photoData}" alt="">`;
   else if (isPersonaGame) $('statBotPfp').innerHTML = silhouetteSVG(44);
   else if (isHumanGame) $('statBotPfp').innerHTML = silhouetteSVG(44);
   else $('statBotPfp').textContent = '🤖';
   $('statBotPfp').classList.toggle('no-photo', botNoPhoto);
+  $('statBotPfp').classList.toggle('clear-bg', game.botType === 'fishstick');
   // No add-friend icon here any more (Nov 5, 2026): tapping a name
   // opens that person's profile window instead. Persona and real
   // games for the opponent (bots have no profile); games started
@@ -2379,12 +2542,15 @@ function blankProfileUI() {
   $('statsList').innerHTML = '';
   const chartCv = $('eloChart'); if (chartCv) chartCv.getContext('2d').clearRect(0, 0, chartCv.width, chartCv.height);
 }
-async function renderProfileUI() {
+async function renderProfileUI(prefetched) {
   // Sign-in is required: no token, or a rejected session, goes to auth.
   if (!token) { setAuthMode('signin'); show('authScreen'); return; }
   blankProfileUI();
-  let d;
-  try { d = await api('/api/me'); }
+  // The background preload (preloadHomeTabs) passes the /api/me
+  // payload it already fetched for the session check, so the profile
+  // is not fetched twice at boot.
+  let d = prefetched || null;
+  try { if (!d) d = await api('/api/me'); }
   catch (err) {
     if (err && err.message === 'Not signed in.') { token = ''; storeDel('duello_token'); me = null; profileData = null; setAuthMode('signin'); show('authScreen'); }
     return;
@@ -2457,35 +2623,87 @@ $('gearBtn').onclick = async () => {
 };
 let editPhotoData;
 $('editPfpWrap').onclick = () => $('editPhotoInput').click();
-// Normal phone photos are several MB, far over the 750KB photo cap
-// as a raw data URL — so shrink the photo on the device first.
-// Pfps display at 36-64px, so 512px on the longest side is plenty;
-// JPEG at 0.82 lands well under the cap. Step down only if a very
-// wide/tall shot still doesn't fit; the "too large" error is now
-// a last resort, not the normal outcome.
-function shrinkPhoto(img, maxSide, quality) {
-  const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-  const w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
-  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  cv.getContext('2d').drawImage(img, 0, 0, w, h);
-  return cv.toDataURL('image/jpeg', quality);
+// Photo crop (v92): after picking a photo, the user frames it in a
+// circular viewport — drag to move, slider to zoom — before it is
+// saved. Pfps display round everywhere, so the crop preview is what
+// you get. Output is a 512x512 JPEG under the 750KB cap.
+const CROP_SIZE = 280; // viewport px, matches .crop-viewport in CSS
+let cropState = null; // {img, base, zoom, x, y}
+function cropBaseScale(img) { return CROP_SIZE / Math.min(img.width, img.height); }
+function cropClamp(s) {
+  // Keep the image covering the square: the offset range is half the
+  // overflow on each axis (0 when the image exactly fills it).
+  const w = s.img.width * s.base * s.zoom, h = s.img.height * s.base * s.zoom;
+  const mx = Math.max(0, (w - CROP_SIZE) / 2), my = Math.max(0, (h - CROP_SIZE) / 2);
+  s.x = Math.max(-mx, Math.min(mx, s.x));
+  s.y = Math.max(-my, Math.min(my, s.y));
 }
+function cropPaint() {
+  const s = cropState; if (!s) return;
+  const el = $('cropImg');
+  el.style.width = (s.img.width * s.base * s.zoom) + 'px';
+  el.style.height = (s.img.height * s.base * s.zoom) + 'px';
+  el.style.transform = 'translate(calc(-50% + ' + s.x + 'px), calc(-50% + ' + s.y + 'px))';
+}
+function openCrop(img) {
+  cropState = { img, base: cropBaseScale(img), zoom: 1, x: 0, y: 0 };
+  $('cropImg').src = img.src;
+  $('cropZoom').value = '1';
+  cropPaint();
+  $('cropModal').classList.remove('hidden');
+}
+function closeCrop() {
+  $('cropModal').classList.add('hidden');
+  cropState = null;
+  $('editPhotoInput').value = ''; // same file picked again still fires
+}
+let cropDrag = null;
+$('cropViewport').addEventListener('pointerdown', e => {
+  if (!cropState) return;
+  cropDrag = { px: e.clientX, py: e.clientY, x: cropState.x, y: cropState.y };
+  try { $('cropViewport').setPointerCapture(e.pointerId); } catch {}
+});
+$('cropViewport').addEventListener('pointermove', e => {
+  if (!cropDrag || !cropState) return;
+  cropState.x = cropDrag.x + (e.clientX - cropDrag.px);
+  cropState.y = cropDrag.y + (e.clientY - cropDrag.py);
+  cropClamp(cropState); cropPaint();
+});
+$('cropViewport').addEventListener('pointerup', () => { cropDrag = null; });
+$('cropViewport').addEventListener('pointercancel', () => { cropDrag = null; });
+$('cropZoom').oninput = () => {
+  if (!cropState) return;
+  cropState.zoom = parseFloat($('cropZoom').value) || 1;
+  cropClamp(cropState); cropPaint();
+};
+$('cropUseBtn').onclick = () => {
+  const s = cropState; if (!s) return;
+  // Map the viewport square back onto the source image: the image is
+  // drawn at (base*zoom) scale, centred on the viewport plus (x, y).
+  const scale = s.base * s.zoom;
+  const w = s.img.width * scale, h = s.img.height * scale;
+  const sx = (w / 2 - CROP_SIZE / 2 - s.x) / scale;
+  const sy = (h / 2 - CROP_SIZE / 2 - s.y) / scale;
+  const side = CROP_SIZE / scale;
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 512;
+  cv.getContext('2d').drawImage(s.img, sx, sy, side, side, 0, 0, 512, 512);
+  let data = cv.toDataURL('image/jpeg', 0.82);
+  if (data.length > 750000) data = cv.toDataURL('image/jpeg', 0.7);
+  if (data.length > 750000) { $('editError').textContent = 'That photo is too large. Pick a smaller one.'; return; }
+  editPhotoData = data;
+  $('editPfp').innerHTML = `<img src="${data}" alt="">`; $('editPfp').classList.remove('no-photo');
+  $('editPhotoRemoveBtn').classList.remove('hidden');
+  $('editError').textContent = '';
+  closeCrop();
+};
+$('cropCancelBtn').onclick = () => closeCrop();
 $('editPhotoInput').onchange = () => {
   const f = $('editPhotoInput').files && $('editPhotoInput').files[0];
   if (!f) return;
   const rd = new FileReader();
   rd.onload = () => {
     const img = new Image();
-    img.onload = () => {
-      let data = shrinkPhoto(img, 512, 0.82);
-      if (data.length > 750000) data = shrinkPhoto(img, 384, 0.75);
-      if (data.length > 750000) data = shrinkPhoto(img, 256, 0.7);
-      if (data.length > 750000) { $('editError').textContent = 'That photo is too large. Pick a smaller one.'; return; }
-      editPhotoData = data;
-      $('editPfp').innerHTML = `<img src="${data}" alt="">`; $('editPfp').classList.remove('no-photo');
-      $('editPhotoRemoveBtn').classList.remove('hidden');
-      $('editError').textContent = '';
-    };
+    img.onload = () => openCrop(img);
     img.onerror = () => { $('editError').textContent = 'That photo could not be read. Try a different one.'; };
     img.src = String(rd.result || '');
   };
