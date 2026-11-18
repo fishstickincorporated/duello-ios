@@ -15,6 +15,12 @@ function storeSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
 function storeDel(k) { try { localStorage.removeItem(k); } catch {} }
 let token = storeGet('duello_token') || '';
 let me = null, game = null, gameFetchAt = 0;
+// Replay (v123, items 5+6): replayIndex is the number of moves from
+// game.moveLog applied to the empty board (null = live/final board,
+// 0 = empty board, moveLog.length = final board). reviewMode is true
+// when the board shows a finished game from the Past Games list
+// (the review buttons replace the end buttons there).
+let replayIndex = null, reviewMode = false;
 // Declared up here, not with the auth block below: the boot code calls
 // setAuthMode, which assigns authMode, so this declaration must already
 // have run or the page dies before any screen shows (ReferenceError:
@@ -74,10 +80,13 @@ const fmtClock = ms => { ms = Math.max(0, Math.ceil(ms / 1000) * 1000); if (ms =
 // to the live server instead. On the web the base is empty, so nothing
 // changes there. Capacitor exposes window.Capacitor in the shell.
 const API_BASE = (typeof window !== 'undefined' && window.Capacitor) ? 'https://duellogame.com' : '';
+// The iOS shell is a Capacitor app; the web is not. Push
+// notifications (v120) only exist in the shell.
+const IS_CAPACITOR = (typeof window !== 'undefined' && !!window.Capacitor);
 // App version (v115): the ?v=N cache-buster in index.html. The local
 // definitions bundle is versioned with the same number so a rebuilt
 // bundle is fetched fresh instead of served stale from the cache.
-const APP_VERSION = 118;
+const APP_VERSION = 126;
 async function api(path, opts = {}) {
   const r = await fetch(API_BASE + path, { ...opts, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(opts.headers || {}) } });
   const j = await r.json().catch(() => ({}));
@@ -112,8 +121,8 @@ function show(id) {
   // and show() clears them on any navigation away.
   if (id !== 'searchingScreen') cancelSearch();
   if (id !== 'rematchScreen') cancelRematch();
-  ['homeScreen', 'botScreen', 'friendsScreen', 'profileScreen', 'profileEditScreen', 'authScreen', 'gameScreen', 'searchingScreen', 'rematchScreen'].forEach(s => { const el = $(s); if (el) el.classList.toggle('hidden', s !== id); });
-  const isMenu = ['homeScreen', 'botScreen', 'friendsScreen', 'profileScreen', 'profileEditScreen'].includes(id);
+  ['homeScreen', 'botScreen', 'friendsScreen', 'profileScreen', 'profileEditScreen', 'pastGamesScreen', 'authScreen', 'gameScreen', 'searchingScreen', 'rematchScreen'].forEach(s => { const el = $(s); if (el) el.classList.toggle('hidden', s !== id); });
+  const isMenu = ['homeScreen', 'botScreen', 'friendsScreen', 'profileScreen', 'profileEditScreen', 'pastGamesScreen'].includes(id);
   // Warm the offline engine when the bot screen opens (v107): the
   // dictionary + solver index build used to run on the first bot tap,
   // so the game took a few seconds to open. Warming here — while the
@@ -125,9 +134,14 @@ function show(id) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   if ((id === 'homeScreen' || id === 'botScreen') && $('tabHome')) $('tabHome').classList.add('active');
   if (id === 'friendsScreen' && $('tabFriends')) $('tabFriends').classList.add('active');
-  if ((id === 'profileScreen' || id === 'profileEditScreen') && $('tabProfile')) $('tabProfile').classList.add('active');
+  if ((id === 'profileScreen' || id === 'profileEditScreen' || id === 'pastGamesScreen') && $('tabProfile')) $('tabProfile').classList.add('active');
   // First Home render warms the Profile + Leaderboard caches (below).
   if (id === 'homeScreen') { preloadHomeTabs(); refreshOnlineButtons(); }
+  // A tab always opens at the top (v124): the window scroll position
+  // used to carry over from the tab you came from, so the new tab
+  // opened halfway down.
+  try { window.scrollTo(0, 0); } catch {}
+  const shown = $(id); if (shown) shown.scrollTop = 0;
 }
 function silhouetteSVG(size) { return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><circle cx="12" cy="8" r="4" fill="#b3b2b1"/><path d="M4 21 C4 16 7 13 12 13 C17 13 20 16 20 21 Z" fill="#b3b2b1"/></svg>`; }
 function pfpHTML(userLike) {
@@ -353,6 +367,12 @@ function preloadHomeTabs() {
         api('/api/users/rank?username=' + encodeURIComponent(f.username)).then(d => setRank(f.username, d.rank)).catch(() => {});
       }
     } catch {}
+    // Warm the Game History list in the background (v126): the list
+    // is fetched once here so it is already in hand when the profile
+    // tab's Game History button is tapped — no Loading note, no wait.
+    // Fire-and-forget; a failure (offline) just leaves the cache
+    // empty and openPastGames fetches on tap as before.
+    try { api('/api/games').then(r => { if (r && Array.isArray(r.games)) pastGamesCache = r.games; }).catch(() => {}); } catch {}
   };
   // Idle-scheduled (v93): the 2s timeout bounds the wait, and the
   // intro now gives it a 3.4s head start, so the profile is ready
@@ -920,6 +940,147 @@ async function checkIncomingChallenges() {
   maybeShowChallengeModal(list);
 }
 startChallengePoll();
+
+// ---------- Push notifications (v120) ----------
+// iOS only (Capacitor shell): a match challenge arrives as a push
+// when the app is closed or backgrounded, reading "@<challenger>
+// challenged you to a match!". Tapping it opens the accept/decline
+// window. The toggle lives in Settings (gear); it gates sending
+// server-side (push_enabled) and registers the device token. Web
+// has no push — the row stays hidden there (see refreshPushToggle).
+// The plugin is reached through the Capacitor bridge
+// (window.Capacitor.Plugins.PushNotifications); no bundler, no
+// import — the native shell registers it.
+function pushPlugin() {
+  try {
+    return (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins) ? (window.Capacitor.Plugins.PushNotifications || null) : null;
+  } catch { return null; }
+}
+let pushDeviceToken = null; // this device's APNs token, once registered
+let pushInitDone = false;
+function pushPrefOn() {
+  // The server defaults the preference on; an older cached `me`
+  // has no pushEnabled field, which also reads as on.
+  return !me || me.pushEnabled !== false;
+}
+function refreshPushToggle() {
+  const row = $('pushSettingRow'); if (!row) return;
+  // Web: no push at all — the row stays hidden.
+  row.classList.toggle('hidden', !IS_CAPACITOR || !pushPlugin());
+  const t = $('pushToggle'); if (!t) return;
+  const on = pushPrefOn();
+  t.classList.toggle('on', on);
+  t.setAttribute('aria-checked', on ? 'true' : 'false');
+  // A denied iOS permission means nothing can arrive even with the
+  // preference on — say so instead of showing a live-looking toggle
+  // with no explanation.
+  const P = pushPlugin();
+  if (P && on) {
+    P.checkPermissions().then((perm) => {
+      if (perm && perm.receive === 'denied') setPushNote('Notifications are off — turn them on in iOS Settings to get challenge alerts.');
+    }).catch(() => {});
+  }
+}
+function setPushNote(msg) {
+  const n = $('pushSettingNote'); if (!n) return;
+  n.textContent = msg || '';
+  n.classList.toggle('hidden', !msg);
+}
+async function registerPushToken() {
+  // Ask iOS for a device token (only after the user has granted
+  // permission) and hand it to the server. The 'registration'
+  // listener below does the actual send; this just starts it.
+  const P = pushPlugin(); if (!P) return false;
+  try { await P.register(); return true; } catch { return false; }
+}
+async function setPushEnabled(on) {
+  const P = pushPlugin();
+  if (on) {
+    // Turning on asks iOS first: without permission there is no
+    // token and nothing to send. A denied permission leaves the
+    // toggle off and says where to fix it.
+    if (!P) { setPushNote('Push notifications need the Duello app.'); return; }
+    let perm = null;
+    try { perm = await P.requestPermissions(); } catch { perm = null; }
+    if (!perm || perm.receive !== 'granted') {
+      setPushNote('Notifications are off — turn them on in iOS Settings to get challenge alerts.');
+      refreshPushToggle();
+      return;
+    }
+    try { await api('/api/push/preference', { method: 'POST', body: JSON.stringify({ enabled: true }) }); } catch {}
+    if (me) { me.pushEnabled = true; persistMe(); }
+    setPushNote('');
+    refreshPushToggle();
+    await registerPushToken();
+    return;
+  }
+  // Turning off: the server stops sending for this user, and this
+  // device's token is removed so a stale token can never fire.
+  try { await api('/api/push/preference', { method: 'POST', body: JSON.stringify({ enabled: false }) }); } catch {}
+  if (pushDeviceToken) { try { await api('/api/push/token/delete', { method: 'POST', body: JSON.stringify({ token: pushDeviceToken }) }); } catch {} }
+  if (me) { me.pushEnabled = false; persistMe(); }
+  setPushNote('');
+  refreshPushToggle();
+}
+$('pushToggle').onclick = async () => {
+  // The switch shows the current preference; tapping flips it.
+  // setPushEnabled re-reads the real state (and can refuse the
+  // flip when iOS permission is denied), then refreshes the UI.
+  await setPushEnabled(!pushPrefOn());
+};
+async function openChallengeFromPush(challengeId) {
+  // A push tap opens the accept/decline window for that challenge.
+  // The challenge may already be gone (declined, cancelled, timed
+  // out) — then the Friends page is the right landing spot, where
+  // the row sits if it is still waiting.
+  if (!token || challengeId == null) return;
+  let list = null;
+  try { list = await fetchIncomingChallenges(); } catch { list = null; }
+  if (!list) return;
+  const c = list.find(x => Number(x.id) === Number(challengeId));
+  if (!c) { show('friendsScreen'); return; }
+  maybeShowChallengeModal([c]);
+  // maybeShowChallengeModal holds the window while a game is active;
+  // the tap still lands on the Friends page, where the row is.
+  if (!challengeModalChallenge) show('friendsScreen');
+}
+function initPushNotifications() {
+  // Runs once, after sign-in: registers the plugin listeners and,
+  // when the preference is on and iOS permission is already
+  // granted, (re-)registers the token — tokens can change between
+  // launches. Never prompts on its own: a never-asked permission
+  // waits for the Settings toggle.
+  if (pushInitDone || !IS_CAPACITOR) return;
+  const P = pushPlugin();
+  if (!P) return;
+  pushInitDone = true;
+  try {
+    P.addListener('registration', async (t) => {
+      pushDeviceToken = (t && t.value) || null;
+      if (!pushDeviceToken || !token) return;
+      try { await api('/api/push/token', { method: 'POST', body: JSON.stringify({ token: pushDeviceToken, platform: 'ios' }) }); } catch {}
+    });
+    P.addListener('registrationError', () => {});
+    P.addListener('pushNotificationReceived', () => {
+      // Foreground: the 5s poll already shows the window, but a
+      // fresh fetch makes it appear at once instead of on the
+      // next tick.
+      try { checkIncomingChallenges(); } catch {}
+    });
+    P.addListener('pushNotificationActionPerformed', (action) => {
+      const d = (action && action.notification && action.notification.data) || {};
+      if (d.type === 'challenge' && d.challengeId != null) openChallengeFromPush(d.challengeId);
+    });
+  } catch {}
+  // Re-register when the preference is on and permission is already
+  // granted — this is what refreshes a rotated token. A 'prompt'
+  // (never asked) result means: wait for the toggle, don't prompt.
+  if (pushPrefOn() && token) {
+    P.checkPermissions().then((perm) => {
+      if (perm && perm.receive === 'granted') registerPushToken();
+    }).catch(() => {});
+  }
+}
 function showFriendsTab() {
   lbScope = 'friends';
   $('lbFriendsTab').classList.add('active'); $('lbGlobalTab').classList.remove('active');
@@ -1063,8 +1224,14 @@ function isOffline() {
 let searchTimer = null, searchingActive = false;
 let searchMode = 'random', challengePersona = null, liveChallengeId = null;
 function cancelSearch() {
+  // Leaving the Play Online queue (v123, item 4): only if a search
+  // was actually in progress — cancelSearch also runs on every
+  // navigation (show()), so an unconditional cancel would POST on
+  // every screen change. Withdrawing from the matchmaking search
+  // removes the player from the queue, so a cancelled search never
+  // pairs them after they walked away.
+  if (searchingActive) api('/api/matchmaking/cancel', { method: 'POST' }).catch(() => {});
   searchingActive = false; challengePersona = null; searchMode = 'random';
-  // Walking away withdraws a live real-player challenge, so it
   // never sits stale on the recipient's Friends page — and an
   // accepted challenge can never strand them in a game alone.
   // (show() calls this on any navigation away, and the Cancel
@@ -1079,6 +1246,12 @@ function startSearching() {
   cancelSearch();
   searchingActive = true;
   show('searchingScreen');
+  // Play Online (v123, item 4): 7 seconds of real-person search.
+  // The queue is polled once a second; a match joins the human game
+  // at once. No match in 7s -> a persona is assigned (one of the 100
+  // fake "human" players), and the game counts as human stats.
+  const SEARCH_MS = 7000, POLL_MS = 1000;
+  let searchStartedAt = 0;
   // Offline (v107): a persona opponent cannot be found without a
   // connection, so the screen says so plainly instead of pretending
   // to search — and the match waits, re-checking every 2s, until the
@@ -1086,18 +1259,35 @@ function startSearching() {
   const waitForConnection = () => {
     if (!searchingActive) return;
     if (isOffline()) {
-      $('searchingText').textContent = 'Searching for internet connection…';
+      // v107: the offline searching note reads exactly this string.
+      $('searchingText').textContent = 'searching for internet connection';
       searchTimer = setTimeout(waitForConnection, 2000);
       return;
     }
     $('searchingText').textContent = 'Searching for opponent…';
-    searchTimer = setTimeout(() => {
+    searchStartedAt = Date.now();
+    pollMatchmaking();
+  };
+  const pollMatchmaking = async () => {
+    if (!searchingActive) return;
+    if (isOffline()) { waitForConnection(); return; }
+    try {
+      const r = await api('/api/matchmaking/search', { method: 'POST' });
       if (!searchingActive) return;
-      // The connection may have dropped while the timer was running.
-      if (isOffline()) { waitForConnection(); return; }
+      if (r && r.matched && r.gameId) {
+        searchingActive = false; searchTimer = null;
+        api('/api/matchmaking/cancel', { method: 'POST' }).catch(() => {});
+        await joinChallengeGame(r.gameId);
+        return;
+      }
+    } catch (e) { /* a failed poll is not a failed search: keep looking */ }
+    if (Date.now() - searchStartedAt >= SEARCH_MS) {
       searchingActive = false; searchTimer = null;
+      api('/api/matchmaking/cancel', { method: 'POST' }).catch(() => {});
       startGame('persona');
-    }, 2000 + Math.floor(Math.random() * 1000));
+      return;
+    }
+    searchTimer = setTimeout(pollMatchmaking, POLL_MS);
   };
   waitForConnection();
 }
@@ -1456,9 +1646,103 @@ function humanOutOfTime() {
 function updateForfeitLabel() {
   const btn = $('forfeitBtn');
   if (!btn || armed[btn.id]) return;
-  const label = humanOutOfTime() ? 'Exit' : 'Forfeit';
+  // Leave (v123, item 3): once your time is out AND you are behind,
+  // Forfeit becomes Leave — tapping it exits you to the main menu
+  // (you lose, Elo moves) while the opponent keeps playing the game
+  // out. Out of time but NOT losing keeps the normal Exit (and its
+  // stat window). Before the clocks run out it is just Forfeit.
+  const label = humanOutOfTime() ? ((game && game.scores && game.scores.human < game.scores.bot) ? 'Leave' : 'Exit') : 'Forfeit';
   if (btn.textContent !== label) btn.textContent = label;
 }
+// Post-game replay (v123, items 5+6): step through the finished
+// game's move sequence. The board at step n is the empty board plus
+// the placements of moveLog[0..n-1]; the scores are the running
+// totals at that step. moveLog is chronological (the server records
+// it in applyMove, the client in applyLocalMove), so a clock-0
+// stretch where one side plays several moves in a row replays in
+// exactly the order it was played. Games without a moveLog (played
+// before v123) show the final board only — the arrows are disabled.
+function replayStateAt(n) {
+  const board = Array.from({ length: 10 }, () => Array(10).fill(null));
+  let human = 0, bot = 0;
+  const log = (game && game.moveLog) || [];
+  for (let i = 0; i < n && i < log.length; i++) {
+    const m = log[i];
+    (m.placements || []).forEach((p) => { board[p.row][p.col] = p.letter; });
+    if (m.side === 'human') human += m.score || 0; else bot += m.score || 0;
+  }
+  return { board, human, bot };
+}
+function replayCanStep() {
+  return !!(game && game.status === 'finished' && Array.isArray(game.moveLog) && game.moveLog.length > 0);
+}
+function renderReplay() {
+  if (replayIndex === null || !game) return;
+  const log = game.moveLog || [];
+  const n = Math.max(0, Math.min(replayIndex, log.length));
+  replayIndex = n;
+  const total = log.length;
+  const st = replayStateAt(n);
+  // Rebuild the board from the replay state (no pending tiles, no
+  // drag — the game is over). The last move applied is highlighted.
+  const lastCells = new Set(n > 0 ? (log[n - 1].placements || []).map((p) => p.row + ',' + p.col) : []);
+  const boardEl = $('board'); boardEl.innerHTML = '';
+  for (let r = 0; r < 10; r++) for (let c = 0; c < 10; c++) {
+    const cell = document.createElement('div');
+    const prem = game.premiums[`${r},${c}`];
+    cell.className = 'cell' + (prem ? ' ' + prem : '') + (lastCells.has(r + ',' + c) ? ' last-word' : '');
+    const letter = st.board[r][c];
+    cell.textContent = letter ? '' : (prem || '');
+    if (letter) { const t = document.createElement('div'); t.className = 'tile'; t.innerHTML = tileSVG(letter); cell.appendChild(t); }
+    boardEl.appendChild(cell);
+  }
+  $('scoreHuman').textContent = String(st.human);
+  $('scoreBot').textContent = String(st.bot);
+  // Clocks rewind to the move (v126): the step shows the remaining
+  // time as it was when that move was played. Step 0 is the start
+  // (4:00 each); the final board shows the game's actual final
+  // clocks; a step in between uses the clocks stored with that move.
+  // Entries logged before v126 carry no clocks — fall back to the
+  // final clocks rather than showing a wrong time.
+  let ch = 240000, cb = 240000;
+  if (n === 0) { ch = 240000; cb = 240000; }
+  else if (n === total) { ch = game.clocks.human; cb = game.clocks.bot; }
+  else { const cc = (log[n - 1] && log[n - 1].clocks) || null; if (cc) { ch = cc.human; cb = cc.bot; } else { ch = game.clocks.human; cb = game.clocks.bot; } }
+  $('clockHuman').textContent = fmtClock(ch);
+  $('clockBot').textContent = fmtClock(cb);
+  // The point bubble rides with the move just applied (v124): the
+  // same +score bubble the live board shows on the last play, so
+  // scrolling through the replay shows what each play was worth. A
+  // pass has no placements and leaves no bubble. The board was just
+  // rebuilt, so no stale bubble survives to clear.
+  if (n > 0) {
+    const m = log[n - 1];
+    const pls = (m && m.placements) || [];
+    if (pls.length) attachBubble(m.score || 0, [pls[pls.length - 1].row, pls[pls.length - 1].col], 'last');
+  }
+  // Status names the step, without the move count (v124): no
+  // "Move x of y" — just who played what, or the start / final.
+  if (n === 0) $('status').textContent = 'Start of game';
+  else if (n === total) $('status').textContent = 'Final board';
+  else {
+    const m = log[n - 1];
+    const who = m.side === 'human' ? 'You' : ($('botName').textContent || 'Opponent');
+    $('status').textContent = `${who} played ${m.mainWord || ''} +${m.score || 0}`;
+  }
+  // One shared arrows row now (v124): the review buttons are gone,
+  // so only these two exist.
+  const back = $('replayBackBtn'), fwd = $('replayFwdBtn');
+  if (back) back.disabled = n === 0;
+  if (fwd) fwd.disabled = n === total;
+}
+function stepReplay(dir) {
+  if (!replayCanStep()) return;
+  const total = game.moveLog.length;
+  if (replayIndex === null) replayIndex = total;
+  replayIndex = Math.max(0, Math.min(total, replayIndex + dir));
+  renderReplay();
+}
+function clearReplay() { replayIndex = null; }
 function renderGame() {
   if (!game) return;
   // Never rebuild the board/rack while a drag is live: re-creating the
@@ -1495,6 +1779,10 @@ function renderGame() {
   else $('botPfp').textContent = '🤖';
   $('botPfp').classList.toggle('no-photo', (isPersonaGame && !usablePhoto(game.persona)) || (isHumanGame && !usablePhoto(game.opponent)));
   $('botPfp').classList.toggle('clear-bg', isFish);
+  // Disconnect (v123, item 2): a real opponent who has been unseen
+  // for >10s gets a faded grey pfp (server's opponentConnected) —
+  // their clock keeps ticking, and at 30s the server ends the game.
+  $('botPfp').classList.toggle('gone', isHumanGame && game.opponentConnected === false);
   document.querySelector('.player-panel').classList.toggle('active', game.status === 'active' && game.clocks.turn === 'human');
   document.querySelector('.bot-panel').classList.toggle('active', game.status === 'active' && game.clocks.turn === 'bot');
   $('scoreHuman').textContent = String(game.scores.human); $('scoreBot').textContent = String(game.scores.bot);
@@ -1515,7 +1803,11 @@ function renderGame() {
   // where the turn-based pick showed a stale move from the side
   // that can no longer move.)
   let shownLast;
-  if (game.clocks.human <= 0) shownLast = game.lastBot || game.lastHuman;
+  // Blank after a game / in a review (v126): the last-play line under
+  // the scoreboard is for a live game. A finished game shows the move
+  // in the replay status instead, so this stays empty.
+  if (game.status === 'finished') shownLast = null;
+  else if (game.clocks.human <= 0) shownLast = game.lastBot || game.lastHuman;
   else if (game.clocks.bot <= 0) shownLast = game.lastHuman || game.lastBot;
   else shownLast = game.clocks.turn === 'human' ? (game.lastBot || game.lastHuman) : (game.lastHuman || game.lastBot);
   $('lastPlay').innerHTML = lastHtml(shownLast);
@@ -1604,7 +1896,17 @@ function renderGame() {
   $('forfeitBtn').disabled = false;
   updateForfeitLabel();
   document.querySelector('.controls').classList.toggle('hidden', finished);
-  $('endButtons').classList.toggle('hidden', !finished);
+  // Post-game buttons (v123, arrows moved out in v124): a finished
+  // game shows Main Menu / Play Again / Game Stats — except a game
+  // opened from Game History, which shows Exit / Game Stats instead
+  // (no Play Again — it is a past game).
+  $('endButtons').classList.toggle('hidden', !finished || reviewMode);
+  $('reviewButtons').classList.toggle('hidden', !finished || !reviewMode);
+  // Deck / arrows (v124): once the game is finished the deck goes
+  // away and the shared arrows row sits in its place, above the
+  // buttons. A live game keeps the deck and hides the arrows.
+  $('rack').classList.toggle('hidden', finished);
+  $('replayArrows').classList.toggle('hidden', !finished);
   $('gameDim').classList.toggle('dimmed', finished && !$('statWindow').classList.contains('hidden'));
   // Every finish shows the stats window at once now, including
   // time expiry (Nov 5, 2026 — the old 3s final-board view is
@@ -1628,6 +1930,28 @@ function renderGame() {
       const lastMove = game.lastBy === 'human' ? game.lastHuman : game.lastBy === 'bot' ? game.lastBot : null;
       if (lastMove && !lastMove.passed) attachBubble(lastMove.points, game.lastCells[game.lastCells.length - 1], 'last');
     }
+  }
+  // Replay (v123, items 5+6): a render after the game ended (a poll
+  // landing, the stat window dismissing) rebuilds the board from the
+  // final state — re-apply the replay step on top so the arrows keep
+  // showing the step the player is on.
+  // Replay entry (v125): a finished game with a log starts at the
+  // final board, so the arrows are live from the first render. The
+  // disabled flag is sticky across games — renderReplay is the only
+  // thing that sets it, and it only runs while replayIndex is set —
+  // so a previous no-log game (or a replay left at an end) left both
+  // arrows dead for the next finished game that has a log, which is
+  // why Fishstick's arrows did nothing. Initialising the index here
+  // makes renderReplay run and set the arrows (back live, forward
+  // off at the final board) the moment the game ends.
+  if (finished && replayIndex === null && replayCanStep()) replayIndex = game.moveLog.length;
+  if (replayIndex !== null && game.status === 'finished') renderReplay();
+  // No replay possible (no moveLog): the arrows stay disabled
+  // instead of looking live and doing nothing (v124).
+  if (finished && !replayCanStep()) {
+    const back = $('replayBackBtn'), fwd = $('replayFwdBtn');
+    if (back) back.disabled = true;
+    if (fwd) fwd.disabled = true;
   }
 }
 let runoffUntil = 0, humanRunoffUntil = 0, timeoutFetching = false, timeoutLastAttempt = 0, timeoutFlipUnconfirmed = false;
@@ -1695,11 +2019,15 @@ function tickClocks() {
   if (game.status === 'active') {
     if (game.clocks.turn === 'human') h = Math.max(0, h - elapsed); else b = Math.max(0, b - elapsed);
   }
-  if (Date.now() >= humanRunoffUntil) $('clockHuman').textContent = fmtClock(h);
+  // In a replay the clocks belong to renderReplay (v126): the 100ms
+  // tick must not overwrite the rewound step clocks with the final
+  // values. The rest of the tick (timeout/end logic) only runs for
+  // an active game, so it is unaffected.
+  if (replayIndex === null && Date.now() >= humanRunoffUntil) $('clockHuman').textContent = fmtClock(h);
   // During a runoff animation the bot clock is driven by the animation,
   // not by this 100ms tick — the tick used to jump it straight to the
   // stepped value and flicker over the animation.
-  if (Date.now() >= runoffUntil) $('clockBot').textContent = fmtClock(b);
+  if (replayIndex === null && Date.now() >= runoffUntil) $('clockBot').textContent = fmtClock(b);
   // Human clock hit 0: do not leave the game sitting on a dead turn.
   // Recall any placed-but-unplayed tiles and flip the turn locally
   // at once, instead of leaving the tile on the board and the turn
@@ -1760,6 +2088,31 @@ function tickClocks() {
   botWatchdog();
 }
 setInterval(tickClocks, 100);
+// Presence heartbeat (v123, item 2): every 5s while a real-player
+// game is open, tell the server "I am still here" — so it can tell
+// my opponent's phone that I am gone (faded pfp) and, at 30s, end
+// the game. Only runs for active human games; bot games are local
+// (offline games never reach the server at all). The reply carries
+// the opponent's connection state and whether they exited.
+let heartbeatInFlight = false;
+setInterval(async () => {
+  if (!game || game.offline || game.botType !== 'human' || game.status !== 'active' || isOffline() || heartbeatInFlight) return;
+  if ($('gameScreen') && $('gameScreen').classList.contains('hidden')) return;
+  heartbeatInFlight = true;
+  try {
+    const r = await api(`/api/games/${game.id}/heartbeat`, { method: 'POST' });
+    if (!r) return;
+    if (r.opponentExited && r.status === 'finished') {
+      game = r; gameAppliedSeq = gameFetchSeq; gameFetchAt = Date.now(); pending = []; renderGame();
+      return;
+    }
+    if (typeof r.opponentConnected === 'boolean' && r.opponentConnected !== game.opponentConnected) {
+      game.opponentConnected = r.opponentConnected;
+      renderGame();
+    }
+  } catch (e) { /* a missed heartbeat is not a disconnect: the next one retries */ }
+  finally { heartbeatInFlight = false; }
+}, 5000);
 
 let botTimer = null, suppressNextClick = false, botTurnTapTime = 0;
 function parseClockText(txt) { const m = /^([0-9]+):([0-9]{2})$/.exec((txt || '').trim()); return m ? Number(m[1]) * 60000 + Number(m[2]) * 1000 : null; }
@@ -2215,6 +2568,10 @@ function buildOfflineGame(botType) {
     started: false,
     consecutivePasses: 0, consecutiveNoMoves: 0,
     moves: { human: [], bot: [] },
+    // Chronological replay log (v123): the same moveLog the server
+    // keeps — it travels with the game in the offline sync payload,
+    // so a synced offline game replays too.
+    moveLog: [],
     lastCells: [], lastWord: null, lastScore: null, lastBy: null,
     lastHuman: null, lastBot: null,
     eloDeltaHuman: null, eloDeltaBot: null, eloAfterHuman: null, eloAfterBot: null,
@@ -2331,6 +2688,13 @@ function applyLocalMove(side, move, bestScore) {
   else game.lastBot = { word: move.mainWord, points: move.score, bonus: move.bonus, isDuello: move.isDuello, bingo: move.bingo, words: allWords };
   const isOptimal = bestScore !== null && bestScore !== undefined && move.score === bestScore;
   game.moves[side].push({ words: (move.words || []).map((w) => ({ word: w.word, score: w.score })), score: move.score, isOptimal, mainWord: move.mainWord, bingo: !!move.bingo });
+  // Chronological replay log (v123): the placements rebuild the
+  // board at any step. clocks (v126): the remaining time on each
+  // clock right after this move, so the replay can tick the clocks
+  // back to when the move was played. For a human move settleLocalClock
+  // already ran, so these are settled; for a bot move the caller
+  // re-stamps them after stepLocalBotClock (the 20s step-down).
+  (game.moveLog = game.moveLog || []).push({ side, placements: (move.placements || []).map((p) => ({ row: p.row, col: p.col, letter: p.letter })), words: (move.words || []).map((w) => ({ word: w.word, score: w.score })), score: move.score, mainWord: move.mainWord, clocks: { human: game.clocks.human, bot: game.clocks.bot } });
   game.consecutivePasses = 0; game.consecutiveNoMoves = 0;
   game.isFirst = localEngine.boardIsEmpty(game.board);
 }
@@ -2482,6 +2846,11 @@ async function runLocalBotTurn() {
   offlinePlays.push({ side: 'bot', rack: offlineBotRack.slice(), placements: move.placements.map((p) => ({ row: p.row, col: p.col, letter: p.letter })) });
   applyLocalMove('bot', move, bestScore);
   stepLocalBotClock();
+  // Re-stamp the clocks on the move just logged (v126): the inline
+  // capture in applyLocalMove ran before the 20s step-down, so the
+  // bot clock there is up to 20s high. After the step-down these are
+  // the exact post-move values the replay must show.
+  if (game.moveLog && game.moveLog.length) game.moveLog[game.moveLog.length - 1].clocks = { human: game.clocks.human, bot: game.clocks.bot };
   game.botThinkUntil = null; game.botThinkMs = null;
   game.clocks.turn = 'human'; game.clocks.turnStartedAt = Date.now(); gameFetchAt = Date.now();
   persistOfflineGame(); renderGame();
@@ -2699,6 +3068,9 @@ function buildSyncPayload(rec) {
       lastWord: st.lastWord, lastScore: st.lastScore, lastBy: st.lastBy,
       lastHuman: st.lastHuman ? { ...st.lastHuman } : null,
       lastBot: st.lastBot ? { ...st.lastBot } : null,
+      // Replay log (v123): stored with the game so a synced offline
+      // game replays from Past Games too.
+      moveLog: (st.moveLog || []).map((m) => ({ side: m.side, placements: (m.placements || []).map((p) => ({ row: p.row, col: p.col, letter: p.letter })), words: (m.words || []).map((w) => ({ ...w })), score: m.score, mainWord: m.mainWord })),
       eloDeltaHuman: st.eloDeltaHuman, eloDeltaBot: st.eloDeltaBot,
       eloAfterHuman: st.eloAfterHuman, eloAfterBot: st.eloAfterBot,
       isFirst: !!st.isFirst,
@@ -3090,13 +3462,26 @@ $('passBtn').onclick = armButton($('passBtn'), 'Pass', async () => {
   try { botTurnTapTime = tapAt; game = await api(`/api/games/${game.id}/pass`, { method: 'POST', body: JSON.stringify({ clientElapsedMs }) }); gameAppliedSeq = gameFetchSeq; gameFetchAt = tapAt; pending = []; renderGame(); animateHumanRunoff(fromHuman, game.clocks.human); beginBotTurn(); }
   catch { game.clocks.turn = 'human'; game.clocks.human = prevHuman; gameFetchAt = prevFetchAt; renderGame(); }
 }, '-30s');
-$('forfeitBtn').onclick = armButton($('forfeitBtn'), () => humanOutOfTime() ? 'Exit' : 'Forfeit', async () => {
+$('forfeitBtn').onclick = armButton($('forfeitBtn'), () => humanOutOfTime() ? ((game && game.scores && game.scores.human < game.scores.bot) ? 'Leave' : 'Exit') : 'Forfeit', async () => {
   // Forfeiting during the countdown stops it outright (v107): the
   // countdown must never fire endCountdown on a finished game.
   cancelCountdown();
+  const wasOutOfTime = humanOutOfTime();
+  const wasLosing = game && game.scores && game.scores.human < game.scores.bot;
+  // Leave (v123, item 3): out of time + losing. You exit to the main
+  // menu at once (no stat window — you are done); the loss and Elo
+  // move are recorded, and a real opponent keeps playing the game
+  // out. A bot game has no one to play out, so Leave there ends the
+  // game outright, same as a forfeit.
+  if (wasOutOfTime && wasLosing) {
+    statShownGameId = game.id;
+    if (game.offline) { doLocalForfeit(); goHome(); return; }
+    try { await api(`/api/games/${game.id}/leave`, { method: 'POST' }); } catch (e) { /* leave anyway: the loss is recorded on the next load */ }
+    goHome();
+    return;
+  }
   // Offline games forfeit locally: the forfeiter loses, no server call.
   if (game && game.offline) { doLocalForfeit(); return; }
-  const wasOutOfTime = humanOutOfTime();
   let forfeitOk = true;
   try {
     game = await api(`/api/games/${game.id}/forfeit`, { method: 'POST' });
@@ -3352,10 +3737,11 @@ async function refreshLeaderboards() {
   globalRows = null;
   await loadServerFriends(true);
 }
-function goHome() { clearStatDelay(); $('statWindow').classList.add('hidden'); show('homeScreen'); refreshLeaderboards(); }
+function goHome() { clearStatDelay(); clearReplay(); reviewMode = false; $('statWindow').classList.add('hidden'); show('homeScreen'); refreshLeaderboards(); }
 $('mainMenuBtn').onclick = goHome; $('statMainMenu').onclick = goHome;
 function playAgain() {
   $('statWindow').classList.add('hidden');
+  clearReplay(); reviewMode = false;
   if (currentBot === 'persona') requestRematch();
   // Play Again against a real player is another challenge to the
   // same opponent: they accept it like the first one. (The stat
@@ -3367,6 +3753,16 @@ function playAgain() {
 $('playAgainBtn').onclick = playAgain;
 $('statPlayAgain').onclick = playAgain;
 $('gameStatsBtn').onclick = () => { if (game && game.stats) showStatWindow(game.stats); };
+// Replay arrows (v123, item 5; one shared row since v124): step the
+// finished game back/forward through its move sequence. Disabled at
+// the ends (renderReplay sets them); a game with no moveLog cannot
+// replay at all (stepReplay returns early).
+$('replayBackBtn').onclick = () => stepReplay(-1);
+$('replayFwdBtn').onclick = () => stepReplay(1);
+// Game History review (v123, item 6; renamed v124): Exit returns to
+// the list; Game Stats opens the stat window for that game.
+$('reviewExitBtn').onclick = () => { reviewMode = false; clearReplay(); showPastGamesCached(); };
+$('reviewStatsBtn').onclick = () => { if (game && game.stats) showStatWindow(game.stats); };
 const defCache = new Map();
 // Local definitions bundle (v115): the client copy of every bundled
 // definition, split into sorted chunks under public/definitions/ with
@@ -3809,6 +4205,11 @@ function enablePlacedDrag(el, pend) {
   let resumed = false;
   try { resumed = await maybeResumeOfflineGame(); } catch {}
   if (!resumed) show('homeScreen');
+  // Push notifications (v120): register the listeners and, when the
+  // preference is on and iOS permission is already granted,
+  // (re-)register the device token. Fire and forget — a push setup
+  // failure must never stall boot.
+  try { initPushNotifications(); } catch {}
 })();
 
 // ---------- Profile tab + real accounts ----------
@@ -3956,6 +4357,144 @@ function drawEloChart() {
   ctx.stroke();
 }
 $('tabProfile').onclick = () => { show('profileScreen'); if (!profileData) renderProfileUI(); };
+// Game History (v123, item 6; renamed v124): the finished games list, from the
+// server (GET /api/games). Each row shows the opponent's pic and
+// username, the score, and the date; tapping one opens its final board in
+// review mode (Exit, replay arrows, Game Stats).
+// Whether the "Could not open that game." note is already showing in
+// the list (v124) — the list is rebuilt on every open, so this resets
+// there; it keeps a repeated failed tap from stacking duplicate notes.
+let openFailNoteShown = false;
+// The last fetched history list (v125): Exit from a review renders
+// this at once instead of re-fetching — the list was just on screen
+// seconds ago, so there is nothing to load.
+let pastGamesCache = null;
+// One row per finished game (v125): the opponent's profile pic and
+// username, the score, and the date. The W/L badge is gone. The
+// username is Duello blue when you won, white when they won.
+function pastGameRowEl(g) {
+  const row = document.createElement('button');
+  row.className = 'past-game-row';
+  const date = g.finishedAt ? new Date(g.finishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+  const picEl = document.createElement('span');
+  picEl.className = 'past-game-pic';
+  if (g.opponentKind === 'fishstick') { picEl.classList.add('past-game-pic-plain'); picEl.innerHTML = '<img src="/assets/fishstick.png?v=1" alt="Fishstick">'; }
+  else if (g.opponentKind === 'competitive') picEl.textContent = '🤖';
+  else if (g.opponentPhoto) picEl.innerHTML = `<img src="${g.opponentPhoto}" alt="">`;
+  else picEl.innerHTML = silhouetteSVG(28);
+  const oppEl = document.createElement('span');
+  oppEl.className = 'past-game-opp ' + (g.result === 'win' ? 'past-game-opp-win' : 'past-game-opp-loss');
+  oppEl.textContent = g.opponentUsername || g.opponentName || 'Opponent';
+  const scoreEl = document.createElement('span'); scoreEl.className = 'past-game-score num'; scoreEl.textContent = `${g.myScore}–${g.oppScore}`;
+  const dateEl = document.createElement('span'); dateEl.className = 'past-game-date'; dateEl.textContent = date;
+  row.append(picEl, oppEl, scoreEl, dateEl);
+  row.onclick = () => openPastGameDetail(g.id);
+  return row;
+}
+function renderPastGamesList(games) {
+  const list = $('pastGamesList');
+  if (!games.length) { list.innerHTML = '<div class="past-games-note">No finished games yet.</div>'; return; }
+  list.innerHTML = '';
+  games.forEach((g) => list.appendChild(pastGameRowEl(g)));
+}
+async function openPastGames() {
+  show('pastGamesScreen');
+  openFailNoteShown = false;
+  // The username under the heading (v124): whose history this is.
+  const un = (me && me.username) || (profileData && profileData.user && profileData.user.username) || '';
+  $('pastGamesUser').textContent = un ? '@' + un : '';
+  const list = $('pastGamesList');
+  // Already warmed in the background (v126): show at once, then
+  // refresh quietly so a game finished since the warm still appears.
+  if (pastGamesCache) {
+    renderPastGamesList(pastGamesCache);
+    refreshPastGamesCache();
+    return;
+  }
+  list.innerHTML = '<div class="past-games-note">Loading…</div>';
+  if (isOffline()) { list.innerHTML = '<div class="past-games-note">Game History needs a connection.</div>'; return; }
+  try {
+    const r = await api('/api/games');
+    const games = (r && r.games) || [];
+    pastGamesCache = games;
+    renderPastGamesList(games);
+  } catch (e) {
+    list.innerHTML = '<div class="past-games-note">Could not load game history.</div>';
+  }
+}
+// Quiet refresh (v126): re-fetch the list in the background and
+// re-render only if it changed (a game finished since the warm).
+// Never shows a Loading note; a no-change refresh leaves the
+// screen — and its scroll — untouched.
+function refreshPastGamesCache() {
+  if (isOffline()) return;
+  api('/api/games').then(r => {
+    const games = (r && r.games) || [];
+    const oldIds = (pastGamesCache || []).map(g => g.id).join(',');
+    const newIds = games.map(g => g.id).join(',');
+    if (oldIds === newIds) return;
+    pastGamesCache = games;
+    renderPastGamesList(games);
+  }).catch(() => {});
+}
+// Back from a review (v125): the list is already in hand, so show it
+// at once — no fetch, no Loading note. Falls back to a fresh fetch
+// when there is no cached list (a direct review entry).
+function showPastGamesCached() {
+  show('pastGamesScreen');
+  openFailNoteShown = false;
+  const un = (me && me.username) || (profileData && profileData.user && profileData.user.username) || '';
+  $('pastGamesUser').textContent = un ? '@' + un : '';
+  if (pastGamesCache) renderPastGamesList(pastGamesCache);
+  else openPastGames();
+}
+async function openPastGameDetail(gameId) {
+  if (isOffline()) { $('status').textContent = 'Game History needs a connection.'; return; }
+  try {
+    const g = await api(`/api/games/${gameId}`);
+    if (!g) return;
+    // Review mode: the finished game, its final board, and the
+    // replay arrows. The auto stat window is suppressed (the user
+    // opens it from the review row's Game Stats button instead).
+    game = g; gameFetchAt = Date.now(); pending = []; selectedRack = null;
+    reviewMode = true;
+    // Start at the final board (v124): the arrows, the point bubble
+    // and the status are set up at once instead of waiting for a
+    // tap. A game with no moveLog has no replay — leave the index
+    // null so the board shows the final state as-is.
+    replayIndex = (g.moveLog && g.moveLog.length) ? g.moveLog.length : null;
+    statShownGameId = g.id;
+    enterReviewScreen();
+  } catch (e) {
+    // Never fail silently (v124): a tap that does nothing is the
+    // bug Jeff reported — say so in the list instead of staying quiet.
+    const list = $('pastGamesList');
+    if (list && !openFailNoteShown) {
+      const note = document.createElement('div');
+      note.classList.add('past-games-note', 'open-fail');
+      note.textContent = 'Could not open that game.';
+      list.prepend(note);
+      openFailNoteShown = true;
+    }
+  }
+}
+// Review entry (v123, item 6): a finished game from Game History.
+// Unlike enterGameScreen (a new game), there is no countdown, no
+// clock reset, and no live stream — the game is over, so the board
+// just shows its final state with the review buttons.
+function enterReviewScreen() {
+  gameAppliedSeq = gameFetchSeq;
+  clearStatDelay();
+  countdownActive = false;
+  $('statWindow').classList.add('hidden');
+  $('gameDim').classList.remove('dimmed');
+  $('countdownOverlay').classList.add('hidden');
+  $('gameScreen').classList.remove('counting');
+  show('gameScreen');
+  renderGame();
+}
+$('pastGamesBtn').onclick = openPastGames;
+$('pastGamesBackBtn').onclick = () => show('profileScreen');
 document.querySelectorAll('.stats-tab').forEach(b => b.onclick = () => { statsScope = b.dataset.scope; document.querySelectorAll('.stats-tab').forEach(x => x.classList.toggle('active', x === b)); renderStatsList(); });
 document.querySelectorAll('.chart-toggle').forEach(b => b.onclick = () => { chartRange = b.dataset.range; document.querySelectorAll('.chart-toggle').forEach(x => x.classList.toggle('active', x === b)); drawEloChart(); });
 $('gearBtn').onclick = async () => {
@@ -3969,6 +4508,8 @@ $('gearBtn').onclick = async () => {
   $('editCurrentPassword').value = ''; $('editNewPassword').value = ''; $('editNewPassword2').value = '';
   $('editPasswordError').textContent = ''; $('editPasswordDone').textContent = '';
   $('editPasswordFields').classList.add('hidden'); renderPwReqs('editPwReqs', '');
+  setPushNote('');
+  refreshPushToggle();
   show('profileEditScreen');
 };
 let editPhotoData;

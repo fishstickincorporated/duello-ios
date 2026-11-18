@@ -1,0 +1,8 @@
+{
+	"appId": "com.duellogame.app",
+	"appName": "Duello",
+	"webDir": "www",
+	"packageClassList": [
+		"PushNotificationsPlugin"
+	]
+}
