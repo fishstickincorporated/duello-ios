@@ -7,9 +7,18 @@
 #   APP_STORE_CONNECT_API_KEY_P8       (done — full .p8, BEGIN/END lines included)
 #   IOS_CERTIFICATE_P12                (base64 of the exported distribution .p12)
 #   IOS_CERTIFICATE_PASSWORD           (password set when exporting the .p12)
-#   IOS_PROVISIONING_PROFILE           (base64 of the App Store .mobileprovision)
+#   IOS_PROVISIONING_PROFILE           (no longer used — profile now in repo as profile-b64.txt; see below)
 #   IOS_PROVISIONING_PROFILE_NAME      (profile name as shown on the developer portal)
 # Team ID JP6TX47769 is hardcoded below (not secret).
+#
+# Provisioning profile source (Nov 18, 2026): the App Store .mobileprovision
+# is stored in the repo as base64 text at profile-b64.txt (root). The workflow
+# decodes it from that file instead of the IOS_PROVISIONING_PROFILE secret,
+# because the 16 KB base64 value could not be pasted into the secret reliably
+# (the paste kept corrupting it). The .mobileprovision is a signing artifact,
+# not a private key — the distribution .p12 private key stays a secret.
+# To replace the profile: base64-encode the new .mobileprovision and overwrite
+# profile-b64.txt, then re-run this workflow.
 #
 # Design notes:
 # - No shared .xcscheme exists in the repo, so archive uses -target App, not -scheme.
@@ -20,9 +29,7 @@
 #   because the Xcode product is named "App" and the exported file may be App.ipa.
 # - The workflow itself is not in the push paths, so adding it does not trigger a run.
 #   First run is manual: Actions tab -> this workflow -> Run workflow.
-
 name: Build and upload to TestFlight
-
 on:
   push:
     branches: [main]
@@ -33,24 +40,19 @@ on:
       - 'package.json'
       - 'package-lock.json'
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: macos-26-intel
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-
       - name: Install dependencies
         run: npm ci
-
       - name: Sync Capacitor
         run: npx cap sync ios
-
       - name: Install signing certificate
         env:
           P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12 }}
@@ -65,15 +67,11 @@ jobs:
           security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
-
       - name: Install provisioning profile
-        env:
-          PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE }}
         run: |
           PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "$PROFILE_DIR"
-          echo "$PROFILE_BASE64" | base64 --decode > "$PROFILE_DIR/duello.mobileprovision"
-
+          base64 --decode < profile-b64.txt > "$PROFILE_DIR/duello.mobileprovision"
       - name: Build archive
         run: |
           xcodebuild -project ios/App/App.xcodeproj \
@@ -87,7 +85,6 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}" \
             CURRENT_PROJECT_VERSION=$(( ${{ github.run_number }} + 1 )) \
             archive
-
       - name: Export IPA
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
@@ -95,12 +92,12 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-            <key>method</key><string>app-store-connect</string>
-            <key>teamID</key><string>JP6TX47769</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>com.duellogame.app</key><string>${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}</string>
-            </dict>
+          <key>method</key><string>app-store-connect</string>
+          <key>teamID</key><string>JP6TX47769</string>
+          <key>provisioningProfiles</key>
+          <dict>
+          <key>com.duellogame.app</key><string>${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}</string>
+          </dict>
           </dict>
           </plist>
           EOF
@@ -110,7 +107,6 @@ jobs:
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
           mv "$RUNNER_TEMP/export"/*.ipa "$RUNNER_TEMP/Duello.ipa"
           ls -la "$RUNNER_TEMP/Duello.ipa"
-
       - name: Upload to TestFlight
         uses: apple-actions/upload-testflight-build@v1
         with:
