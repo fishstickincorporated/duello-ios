@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Duello bot play</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="/style.css?v=157"></head>
+<body><div id="introOverlay"><div id="introFlicker"></div><div id="introInner"><div id="introLogoZoom"><img id="introLogo" src="/assets/logo.png?v=2" alt="DUELLO"></div></div></div><div id="bootError" style="display:none;position:fixed;top:12px;left:12px;right:12px;z-index:9999;background:#ffd166;color:#1a1d24;padding:12px;border-radius:10px;font-size:14px;line-height:1.4" onclick="this.style.display='none'"></div><div id="app">
+  <noscript><p style="color:#e8ecf1;text-align:center;padding:40px 20px">Duello needs JavaScript enabled to run. Turn JavaScript on in your browser settings and reload.</p></noscript>
+
+  <section id="homeScreen" class="screen hidden">
+    <img class="logo-img home-logo" src="/assets/logo.png?v=2" alt="DUELLO">
+    <div class="home-spacer" aria-hidden="true"></div>
+    <div class="home-head">
+      <div class="pfp home-pfp" id="homePfp" role="button" aria-label="Open profile" tabindex="0"></div>
+      <div class="home-head-stats">
+        <div class="home-stat"><span class="home-stat-icon"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.2 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z" fill="#ffd166"/></svg></span><span class="home-stat-value" id="homeElo"></span><span class="home-stat-label">elo</span></div>
+        <div class="home-stat"><span class="home-stat-icon"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z" fill="#ff8d03"/></svg></span><span class="home-stat-value" id="homeStreak"></span><span class="home-stat-label">day streak</span></div>
+      </div>
+      <div class="home-pro" aria-label="Duello Pro" title="Duello Pro"><svg viewBox="0 0 100 100" width="40" height="40"><path d="M94.0 50.0L98.1 54.2L97.6 58.4L92.5 61.4L87.3 63.6L86.0 66.8L88.1 72.0L89.6 77.7L87.0 81.1L81.1 81.1L75.5 80.4L72.8 82.5L72.0 88.1L70.4 93.8L66.5 95.4L61.4 92.5L56.9 89.1L53.5 89.5L50.0 94.0L45.8 98.1L41.6 97.6L38.6 92.5L36.4 87.3L33.2 86.0L28.0 88.1L22.3 89.6L18.9 87.0L18.9 81.1L19.6 75.5L17.5 72.8L11.9 72.0L6.2 70.4L4.6 66.5L7.5 61.4L10.9 56.9L10.5 53.5L6.0 50.0L1.9 45.8L2.4 41.6L7.5 38.6L12.7 36.4L14.0 33.2L11.9 28.0L10.4 22.3L13.0 18.9L18.9 18.9L24.5 19.6L27.2 17.5L28.0 11.9L29.6 6.2L33.5 4.6L38.6 7.5L43.1 10.9L46.5 10.5L50.0 6.0L54.2 1.9L58.4 2.4L61.4 7.5L63.6 12.7L66.8 14.0L72.0 11.9L77.7 10.4L81.1 13.0L81.1 18.9L80.4 24.5L82.5 27.2L88.1 28.0L93.8 29.6L95.4 33.5L92.5 38.6L89.1 43.1L89.5 46.5L94.0 50.0Z" fill="none" stroke="#ffd166" stroke-width="5" stroke-linejoin="round"/><text x="50" y="56" text-anchor="middle" font-size="19" font-weight="700" fill="#ffd166" font-family="Comfortaa, sans-serif">PRO</text></svg></div>
+      <button class="home-upgrade-pill hidden" id="homeUpgradePill">Upgrade to Pro</button>
+    </div>
+    <div class="home-spacer" aria-hidden="true"></div>
+    <div class="modes">
+      <button class="mode mode-online" id="playOnlineBtn"><span class="sym white"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-3 3-3 15 0 18M12 3c3 3 3 15 0 18"/></svg></span><span class="label-col"><span class="label">Play Online</span><span class="sub">Match with players at your skill level</span></span><span class="chev">›</span></button>
+      <button class="mode mode-friends" id="playFriendsBtn"><span class="sym white"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><path d="M2 20c0-3 2.7-5 6-5s6 2 6 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15 14.5c2.8 0 5 1.7 5 4.5"/></svg></span><span class="label-col"><span class="label">Play Friends</span><span class="sub">Challenge the homies</span></span><span class="chev">›</span></button>
+      <button class="mode mode-bots" id="playBotsBtn"><span class="sym white"><svg viewBox="0 0 24 24"><circle cx="12" cy="2.5" r="1.2" fill="#fff" stroke="none"/><path d="M12 4v2"/><rect x="3.5" y="9.5" width="2" height="4" rx="1" fill="#fff"/><rect x="18.5" y="9.5" width="2" height="4" rx="1" fill="#fff"/><rect x="5" y="6" width="14" height="13" rx="3" fill="#fff"/><rect x="8" y="10" width="2.5" height="2.5" fill="#3a3f4b" stroke="none"/><rect x="13.5" y="10" width="2.5" height="2.5" fill="#3a3f4b" stroke="none"/><rect x="10" y="14.5" width="4" height="1.5" fill="#3a3f4b" stroke="none"/></svg></span><span class="label-col"><span class="label">Play Bots</span><span class="sub">Practice against AI</span></span><span class="chev">›</span></button>
+      <button class="mode mode-puzzle" id="dailyPuzzleBtn"><span class="sym white"><svg viewBox="0 0 24 24"><path d="M6 6h4a2 2 0 0 1 4 0h4v4a2 2 0 0 1 0 4v4h-4a2 2 0 0 0-4 0H6v-4a2 2 0 0 0 0-4V6z" fill="#fff"/></svg></span><span class="label-col"><span class="label">Daily Puzzle</span><span class="sub" id="puzzleStreakSub">0 day streak!🔥</span></span><span class="soon hidden" id="puzzleSolvedTag">Solved</span><span class="chev">›</span></button>
+    </div>
+    <div class="home-spacer" aria-hidden="true"></div>
+  </section>
+
+  <section id="puzzleBoardScreen" class="screen hidden">
+    <div class="puzzle-board-title">Daily Puzzle</div>
+    <div class="puzzle-board-date" id="puzzleBoardDate"></div>
+    <!-- v152: the 7-day week strip — today on the right, the 6 most
+         recent days to its left; a solid flame for a solved day, a
+         grey flame for a missed one. -->
+    <div id="puzzleWeekStrip" class="puzzle-week"></div>
+    <div class="puzzle-strength" id="puzzleStrengthWrap">
+      <div class="puzzle-strength-track"><div class="puzzle-strength-fill" id="puzzleStrengthFill"></div><div class="puzzle-strength-knob" id="puzzleStrengthPct">0%</div></div>
+    </div>
+    <div class="board-wrap"><div id="puzzleBoard" class="board"></div></div>
+    <div class="status puzzle-status" id="puzzleBoardStatus"></div>
+    <div id="puzzleRack" class="rack"></div>
+    <div class="controls"><button id="puzzleBoardExitBtn">Exit</button><button id="puzzleBoardRecallBtn">Recall</button><button id="puzzleBoardShuffleBtn">Shuffle</button><button id="puzzleBoardShareBtn" class="hidden">Share</button><button id="puzzleBoardReplayBtn" class="hidden">Replay</button></div>
+    <div id="puzzleConfetti" class="puzzle-confetti hidden"></div>
+  </section>
+
+  <section id="botScreen" class="screen hidden">
+    <img class="logo-img home-logo" src="/assets/logo.png?v=2" alt="DUELLO">
+    <div class="bot-options">
+      <button class="bot-opt" id="competitiveBtn"><span class="sym white"><svg viewBox="0 0 24 24"><circle cx="12" cy="2.5" r="1.2" fill="#fff" stroke="none"/><path d="M12 4v2"/><rect x="3.5" y="9.5" width="2" height="4" rx="1" fill="#fff"/><rect x="18.5" y="9.5" width="2" height="4" rx="1" fill="#fff"/><rect x="5" y="6" width="14" height="13" rx="3" fill="#fff"/><rect x="8" y="10" width="2.5" height="2.5" fill="#3a3f4b" stroke="none"/><rect x="13.5" y="10" width="2.5" height="2.5" fill="#3a3f4b" stroke="none"/><rect x="10" y="14.5" width="4" height="1.5" fill="#3a3f4b" stroke="none"/></svg></span><span class="label-col"><span class="label">Doppelgänger</span><span class="sub">Plays at your elo. Results count.</span></span><span class="chev">›</span></button>
+      <button class="bot-opt" id="fishstickBtn"><span class="sym white"><svg viewBox="0 0 24 24"><ellipse cx="10" cy="12" rx="7" ry="5" fill="#fff" stroke="none"/><path d="M16 12 L21 8 L20 12 L21 16 Z" fill="#fff" stroke="none"/><circle cx="7" cy="10.5" r="1.2" fill="#3a3f4b" stroke="none"/></svg></span><span class="label-col"><span class="label">Fishstick</span><span class="sub">You're gonna lose. Results don't count.</span></span><span class="chev">›</span></button>
+    </div>
+    <button class="back-pill" id="botBackBtn">← Back</button>
+  </section>
+
+  <section id="friendsScreen" class="screen hidden">
+    <div class="search-wrap">
+      <span class="search-icon"><svg viewBox="0 0 24 24" width="18" height="18"><circle cx="11" cy="11" r="7" fill="none" stroke="#b3b2b1" stroke-width="2"/><path d="M16 16 L21 21" stroke="#b3b2b1" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <input id="friendSearch" type="text" placeholder="Search players" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div id="friendSearchResults" class="search-results"></div>
+    <div id="challengeRequests" class="requests"></div>
+    <div id="friendRequests" class="requests"></div>
+    <div class="leaderboard-head">
+      <span class="leaderboard-label">LEADERBOARD</span>
+      <button class="pencil" id="friendsPencil" title="Delete friends"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M16.5 4.5 L19.5 7.5 L8 19 L3 20 L4 15 Z" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7 L17 10" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="leaderboard-tabs">
+      <button class="lb-tab active" id="lbFriendsTab">Friends</button>
+      <button class="lb-tab" id="lbGlobalTab">Global</button>
+    </div>
+    <div id="leaderboardStaleNote" class="small hidden" style="text-align:center;padding:4px 0 8px"></div>
+    <div id="leaderboardList" class="leaderboard"></div>
+    <div id="noFriendsCard" class="no-friends-card hidden">No friends yet…</div>
+  </section>
+
+  <section id="profileScreen" class="screen hidden">
+    <div class="profile-top">
+      <div class="pfp huge" id="profilePfp"></div>
+      <div class="profile-name" id="profileName"></div>
+      <div class="profile-username" id="profileUsername"></div>
+      <div class="profile-joined" id="profileJoined"></div>
+      <div id="profileStaleNote" class="small hidden" style="text-align:center;padding:6px 0 0"></div>
+      <button class="gear-btn" id="gearBtn" title="Edit profile"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M10.5 4.5 L10.6 2.1 L13.4 2.1 L13.5 4.5 L16.2 5.7 L18.0 4.0 L20.0 6.0 L18.3 7.8 L19.5 10.5 L21.9 10.6 L21.9 13.4 L19.5 13.5 L18.3 16.2 L20.0 18.0 L18.0 20.0 L16.2 18.3 L13.5 19.5 L13.4 21.9 L10.6 21.9 L10.5 19.5 L7.8 18.3 L6.0 20.0 L4.0 18.0 L5.7 16.2 L4.5 13.5 L2.1 13.4 L2.1 10.6 L4.5 10.5 L5.7 7.8 L4.0 6.0 L6.0 4.0 L7.8 5.7 Z M 8.4 12.0 a 3.6 3.6 0 1 0 7.2 0 a 3.6 3.6 0 1 0 -7.2 0" fill="#b3b2b1" fill-rule="evenodd"/></svg></button>
+    </div>
+    <div class="elo-box">
+      <div class="elo-row">
+        <div><span class="elo-label">Elo</span><div class="elo-big" id="profileElo"></div></div>
+        <div><span class="elo-label">All-time high</span><div class="elo-big" id="profileEloHigh"></div></div>
+        <div><span class="elo-label">Global rank</span><div class="elo-big" id="profileGlobalRank"></div></div>
+      </div>
+      <div class="chart-toggles">
+        <button class="chart-toggle active" data-range="1m">1 month</button>
+        <button class="chart-toggle" data-range="1y">1 year</button>
+        <button class="chart-toggle" data-range="all">All time</button>
+      </div>
+      <canvas id="eloChart" width="340" height="110"></canvas>
+    </div>
+    <div class="stats-board">
+      <div class="stats-tabs">
+        <button class="stats-tab active" data-scope="aggregate">Aggregate</button>
+        <button class="stats-tab" data-scope="vsHumans">Vs Humans</button>
+        <button class="stats-tab" data-scope="vsBots">Vs Bots</button>
+      </div>
+      <div id="statsList" class="stats-list"></div>
+    </div>
+    <!-- Game History (v123, renamed v124): below the profile stats. -->
+    <button class="menu-btn" id="pastGamesBtn" style="margin-top:16px">Game History</button>
+  </section>
+
+  <!-- Game History list (v123, renamed v124). Filter tabs (v128) match the stats screen; Load more (v128) sits below the list, above Back. The tabs + log sit on the same grey card as the lifetime stats (v130). -->
+  <section id="pastGamesScreen" class="screen hidden">
+    <h1 class="auth-heading">Game History</h1>
+    <div id="pastGamesUser" class="past-games-user"></div>
+    <div class="history-board">
+      <div class="history-tabs">
+        <button class="history-tab active" data-scope="aggregate">Aggregate</button>
+        <button class="history-tab" data-scope="vsHumans">Vs Humans</button>
+        <button class="history-tab" data-scope="vsBots">Vs Bots</button>
+      </div>
+      <div id="pastGamesList" class="past-games-list"></div>
+    </div>
+    <button class="menu-btn hidden" id="pastGamesMoreBtn">Load more</button>
+    <button class="back-pill" id="pastGamesBackBtn">← Back</button>
+  </section>
+
+  <section id="profileEditScreen" class="screen hidden">
+    <h1 class="auth-heading">Settings</h1>
+    <div class="settings-group">
+      <button class="settings-row" id="editPhotoRow" type="button"><span class="settings-label">Photo</span><span class="settings-value"><span class="settings-pfp" id="editRowPfp"></span><span class="settings-chev">&rsaquo;</span></span></button>
+      <button class="settings-row" id="editFirstNameRow" type="button"><span class="settings-label">First name</span><span class="settings-value"><span class="settings-val" id="editRowFirstName"></span><span class="settings-chev">&rsaquo;</span></span></button>
+      <button class="settings-row" id="editLastNameRow" type="button"><span class="settings-label">Last name</span><span class="settings-value"><span class="settings-val" id="editRowLastName"></span><span class="settings-chev">&rsaquo;</span></span></button>
+      <button class="settings-row" id="editUsernameRow" type="button"><span class="settings-label">Username</span><span class="settings-value"><span class="settings-val" id="editRowUsername"></span><span class="settings-chev">&rsaquo;</span></span></button>
+      <button class="settings-row" id="editEmailRow" type="button"><span class="settings-label">Email</span><span class="settings-chev">&rsaquo;</span></button>
+      <button class="settings-row" id="editPasswordRow" type="button"><span class="settings-label">Password</span><span class="settings-chev">&rsaquo;</span></button>
+    </div>
+    <div class="settings-group">
+      <button class="settings-row" id="editProRow" type="button"><span class="settings-label">Subscription</span><span class="settings-value"><span class="settings-val" id="editRowPro"></span><span class="settings-chev">&rsaquo;</span></span></button>
+    </div>
+    <div class="settings-group">
+      <button class="settings-row" id="privacyRow" type="button"><span class="settings-label">Privacy Policy</span><span class="settings-chev">&rsaquo;</span></button>
+    </div>
+    <div class="settings-group">
+      <button class="settings-row" id="profileSignOutBtn" type="button"><span class="settings-label">Sign out</span></button>
+      <button class="settings-row settings-row-danger" id="editDeleteBtn" type="button"><span class="settings-label">Delete account</span></button>
+    </div>
+    <p class="def-credit">Definitions via Wiktionary (CC BY-SA)</p>
+    <input id="editPhotoInput" type="file" accept="image/*" class="hidden">
+  </section>
+
+  <section id="profileFieldScreen" class="screen hidden">
+    <h1 class="auth-heading" id="fieldTitle">First name</h1>
+    <div class="settings-group"><div class="settings-row"><input id="fieldInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div></div>
+    <p id="fieldError" class="error"></p>
+    <div class="edit-actions stacked">
+      <button class="btn primary" type="button" id="fieldSaveBtn">Save</button>
+    </div>
+    <button class="back-pill" id="fieldBackBtn" type="button">&larr; Back</button>
+  </section>
+
+  <section id="profilePhotoScreen" class="screen hidden">
+    <h1 class="auth-heading">Change Photo</h1>
+    <div class="edit-photo">
+      <div class="pfp huge" id="editPfp"></div>
+    </div>
+    <div class="edit-actions stacked">
+      <button class="btn primary" type="button" id="editPhotoChooseBtn">Choose photo</button>
+      <button class="btn danger-outline hidden" id="editPhotoRemoveBtn" type="button">Remove photo</button>
+      <button class="back-pill" id="editPhotoBackBtn" type="button">&larr; Back</button>
+    </div>
+    <p id="photoError" class="error"></p>
+  </section>
+
+  <section id="profilePasswordScreen" class="screen hidden">
+    <h1 class="auth-heading">Change Password</h1>
+    <div class="settings-group">
+      <div class="pw-wrap"><input id="editCurrentPassword" type="password" placeholder="Current password" autocomplete="off"><button class="pw-eye" type="button" data-target="editCurrentPassword" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+      <div class="pw-wrap"><input id="editNewPassword" type="password" placeholder="New password" autocomplete="off"><button class="pw-eye" type="button" data-target="editNewPassword" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+      <div class="pw-wrap"><input id="editNewPassword2" type="password" placeholder="New password again" autocomplete="off"><button class="pw-eye" type="button" data-target="editNewPassword2" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+      <ul class="pw-reqs" id="editPwReqs"><li data-req="len">At least 8 characters</li><li data-req="upper">A capital letter</li><li data-req="lower">A lowercase letter</li><li data-req="digit">A number</li></ul>
+    </div>
+    <div class="edit-actions stacked">
+      <button class="btn primary" id="editPasswordSaveBtn" type="button">Save new password</button>
+    </div>
+    <button class="back-pill" id="editPasswordBackBtn" type="button">&larr; Back</button>
+    <p id="editPasswordError" class="error"></p>
+    <p id="editPasswordDone" class="success"></p>
+  </section>
+
+  <section id="profileProScreen" class="screen hidden">
+    <h1 class="auth-heading">Subscription</h1>
+    <div class="settings-group">
+      <button class="settings-row pro-option" id="proFreeRow" type="button"><span class="settings-label">Duello Free</span><span class="settings-check" id="proFreeCheck">&check;</span></button>
+      <button class="settings-row pro-option" id="proProRow" type="button"><span class="settings-label">Duello Pro</span><span class="settings-check" id="proProCheck"></span></button>
+    </div>
+    <button class="back-pill" id="proBackBtn" type="button">&larr; Back</button>
+    <p id="proError" class="error"></p>
+  </section>
+
+  <!-- v151: Privacy Policy opens inside the app (window.open with
+       _blank is a no-op in the Capacitor WebView — no Browser plugin
+       — so the row used to do nothing on Jeff's phone). The policy
+       text is fetched from the bundled /privacy.html and injected
+       here; that file stays the single source of truth. -->
+  <section id="profilePrivacyScreen" class="screen hidden">
+    <button class="back-pill" id="privacyBackBtn" type="button">← Back</button>
+    <div id="privacyContent" class="privacy-body"></div>
+  </section>
+
+  <section id="authScreen" class="screen hidden">
+    <h1 class="auth-heading" id="authHeading">Sign in</h1>
+    <form id="authForm" autocomplete="off">
+      <input id="authEmail" type="email" placeholder="Email" autocomplete="off">
+      <div class="pw-wrap"><input id="authPassword" type="password" placeholder="Password" autocomplete="off"><button class="pw-eye" type="button" data-target="authPassword" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+      <p id="authError" class="error"></p>
+      <p id="authSuccess" class="success"></p>
+      <button class="btn primary" type="submit" id="authSubmitBtn">Sign in</button>
+      <button class="link" id="forgotPasswordBtn" type="button">Forgot password?</button>
+    </form>
+    <div id="signupSteps" class="hidden">
+      <div id="signupStepEmail">
+        <input id="suEmail" type="email" placeholder="Email" autocomplete="off">
+        <p id="suError" class="error"></p>
+        <button class="btn primary" id="suSendBtn" type="button">Send code</button>
+        <p>We will email you a 6-digit code.</p>
+      </div>
+      <div id="signupStepCode" class="hidden">
+        <p id="suSentMsg" class="success"></p>
+        <input id="suCode" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="off">
+        <p id="suError2" class="error"></p>
+        <button class="btn primary" id="suVerifyBtn" type="button">Verify</button>
+        <button class="link" id="suResendBtn" type="button">Send a new code</button>
+        <button class="link" id="suBackBtn" type="button">Use a different email</button>
+      </div>
+      <div id="signupStepProfile" class="hidden">
+        <input id="suFirstName" placeholder="First name">
+        <input id="suLastName" placeholder="Last name">
+        <input id="suUsername" placeholder="Username" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <div class="pw-wrap"><input id="suPassword" type="password" placeholder="Password" autocomplete="off"><button class="pw-eye" type="button" data-target="suPassword" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+        <ul class="pw-reqs" id="suPwReqs"><li data-req="len">At least 8 characters</li><li data-req="upper">A capital letter</li><li data-req="lower">A lowercase letter</li><li data-req="digit">A number</li></ul>
+        <p id="suError3" class="error"></p>
+        <button class="btn primary" id="suCreateBtn" type="button">Create account</button>
+      </div>
+    </div>
+    <div id="resetSteps" class="hidden">
+      <div id="resetStepEmail">
+        <input id="rpEmail" type="email" placeholder="Email" autocomplete="off">
+        <p id="rpError" class="error"></p>
+        <button class="btn primary" id="rpSendBtn" type="button">Send code</button>
+        <p>We will email you a 6-digit code if an account exists for that email.</p>
+      </div>
+      <div id="resetStepCode" class="hidden">
+        <p id="rpSentMsg" class="success"></p>
+        <input id="rpCode" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="off">
+        <p id="rpError2" class="error"></p>
+        <button class="btn primary" id="rpVerifyBtn" type="button">Verify</button>
+        <button class="link" id="rpResendBtn" type="button">Send a new code</button>
+        <button class="link" id="rpBackBtn" type="button">Use a different email</button>
+      </div>
+      <div id="resetStepPassword" class="hidden">
+        <div class="pw-wrap"><input id="rpPassword" type="password" placeholder="New password" autocomplete="off"><button class="pw-eye" type="button" data-target="rpPassword" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+        <div class="pw-wrap"><input id="rpPassword2" type="password" placeholder="New password again" autocomplete="off"><button class="pw-eye" type="button" data-target="rpPassword2" aria-label="Show password"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#b3b2b1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+        <ul class="pw-reqs" id="rpPwReqs"><li data-req="len">At least 8 characters</li><li data-req="upper">A capital letter</li><li data-req="lower">A lowercase letter</li><li data-req="digit">A number</li></ul>
+        <p id="rpError3" class="error"></p>
+        <button class="btn primary" id="rpResetBtn" type="button">Set new password</button>
+      </div>
+    </div>
+    <button class="link" id="authToggleBtn">Need an account? Sign up</button>
+    <p class="small privacy-link"><a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p>
+  </section>
+
+  <section id="gameScreen" class="screen hidden">
+    <div id="gameDim">
+      <img class="logo-img small-logo-img" id="gameLogo" src="/assets/logo.png?v=2" alt="DUELLO">
+      <div class="scoreboard" id="scoreboard">
+        <div class="panel player-panel" id="playerPanel">
+          <div class="panel-top">
+          <div class="col identity-col"><div class="pfp no-photo">👤</div><div class="name" id="playerName">You</div><div class="elo" id="playerElo">1000</div></div>
+          <div class="col clock-col"><div class="clock-row"><span class="byoyomi hidden" id="byoyomiHuman">0:12</span><span class="clock" id="clockHuman">4:00</span></div><span class="game-score" id="scoreHuman">0</span></div>
+          </div>
+        </div>
+        <div class="panel bot-panel" id="botPanel">
+          <div class="panel-top">
+          <div class="col clock-col"><div class="clock-row"><span class="clock" id="clockBot">4:00</span><span class="byoyomi hidden" id="byoyomiBot">0:12</span></div><span class="game-score" id="scoreBot">0</span></div>
+          <div class="col identity-col"><div class="pfp" id="botPfp">🤖</div><div class="name" id="botName">Bot</div><div class="elo" id="botElo">1000</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="lastplay" id="lastPlay"></div>
+      <div class="board-wrap"><div id="board" class="board"></div><div id="innerGlow" class="inner-glow"><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div><div class="glow-cell"></div></div><div id="countdownOverlay" class="countdown-overlay hidden"><div class="countdown-num" id="countdownNum">5</div></div></div>
+      <div id="status" class="status">Your move</div>
+      <div id="rack" class="rack"></div>
+      <!-- Replay arrows (v124): in the deck's place once the game is
+           finished — the deck is hidden and the arrows sit above the
+           buttons. One shared row for the post-game replay and the
+           Game History review. -->
+      <div id="replayArrows" class="replay-arrows hidden">
+        <button id="replayBackBtn" class="replay-btn" title="Previous move">&#8592;</button>
+        <button id="replayFwdBtn" class="replay-btn" title="Next move">&#8594;</button>
+      </div>
+      <div class="controls" id="gameControls">
+        <button id="forfeitBtn">Forfeit</button><button id="passBtn">Pass</button>
+        <button id="playBtn" disabled>Play</button><button id="recallBtn">Recall</button><button id="shuffleBtn">Shuffle</button>
+      </div>
+      <div id="endButtons" class="controls hidden">
+        <button id="mainMenuBtn">Main Menu</button><button id="playAgainBtn">Play Again</button><button id="gameStatsBtn">Game Stats</button>
+      </div>
+      <!-- Game History review (v123, renamed v124): the final board
+           of a finished game from the Game History list. Exit returns
+           to the list; no Play Again here (it is a past game). -->
+      <div id="reviewButtons" class="controls hidden">
+        <button id="reviewExitBtn">Exit</button><button id="reviewStatsBtn">Game Stats</button>
+      </div>
+    </div>
+    <div id="statWindow" class="stat-window hidden">
+      <div class="stat-winner" id="statWinner"></div>
+      <div class="stat-top"><div class="stat-pfp"><div class="pfp big no-photo">👤</div><div class="elo-move" id="eloMoveHuman">+0</div></div>
+      <div class="stat-score" id="statScore">0–0</div>
+      <div class="stat-pfp"><div class="pfp big" id="statBotPfp">🤖</div><div class="elo-move" id="eloMoveBot">+0</div></div></div>
+      <div class="stat-reason" id="statReason"></div>
+      <div class="stat-grid" id="statGrid"></div>
+      <div id="statOptimalList" class="stat-optimal-list hidden"></div>
+      <div class="controls"><button id="statMainMenu">Main Menu</button><button id="statPlayAgain">Play Again</button></div>
+    </div>
+    <div id="defPopover" class="def-popover hidden"></div>
+  </section>
+
+  <section id="searchingScreen" class="screen hidden">
+    <img class="logo-img home-logo" src="/assets/logo.png?v=2" alt="DUELLO">
+    <div class="searching-box">
+      <div class="searching-dots"><span></span><span></span><span></span></div>
+      <div class="searching-text" id="searchingText">Searching for opponent…</div>
+      <button class="btn primary" id="searchCancelBtn">Cancel</button>
+    </div>
+  </section>
+
+  <section id="rematchScreen" class="screen hidden">
+    <img class="logo-img home-logo" src="/assets/logo.png?v=2" alt="DUELLO">
+    <div class="rematch-box">
+      <div class="rematch-text" id="rematchText">Request sent — waiting for your opponent to accept…</div>
+      <div class="controls hidden" id="rematchActions">
+        <button id="rematchHomeBtn">Back Home</button>
+        <button id="rematchNewBtn">Find a new opponent</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- v149: the drag ghost lives at the top level of #app, not inside
+       #gameScreen — a screen's .hidden (display:none) hides the whole
+       subtree, so a ghost inside the game screen could never show on
+       the Daily Puzzle screen even though showGhost() unhid the ghost
+       itself. That is why the puzzle tile never appeared to grab: the
+       drop worked, but the ghost was invisible. Fixed positioning
+       makes the ghost render the same wherever it sits. -->
+  <div id="dragGhost" class="drag-ghost hidden"></div>
+
+  <nav id="tabBar" class="tab-bar hidden" aria-label="Main navigation">
+    <button class="tab-btn active" id="tabHome" aria-label="Home"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M3 11 L12 3 L21 11 L21 21 L14 21 L14 14 L10 14 L10 21 L3 21 Z" fill="#b3b2b1"/><rect x="10.5" y="16" width="3" height="5" fill="#03eaff"/></svg></button>
+    <button class="tab-btn" id="tabFriends" aria-label="Friends"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="8" cy="8" r="3" fill="#b3b2b1"/><circle cx="16" cy="8" r="3" fill="#03eaff"/><path d="M3 20 C3 16 5 14 8 14 C11 14 13 16 13 20 Z" fill="#b3b2b1"/><path d="M11 20 C11 16 13 14 16 14 C19 14 21 16 21 20 Z" fill="#03eaff"/></svg></button>
+    <button class="tab-btn" id="tabProfile" aria-label="Profile"><span id="tabProfileIcon"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="8" r="4" fill="#b3b2b1"/><path d="M4 21 C4 16 7 13 12 13 C17 13 20 16 20 21 Z" fill="#03eaff" opacity="0.85"/></svg></span></button>
+  </nav>
+  <div id="personModal" class="person-modal hidden"><div class="person-card"><button class="person-close" id="personCloseBtn" aria-label="Close profile">×</button><span class="person-pfp" id="personPfp"></span><div class="person-name" id="personName"></div><div class="person-user" id="personUser"></div><div class="person-elo">Elo <span id="personElo"></span></div><div class="person-rank">Global Rank <span id="personRank"></span></div><button class="person-add" id="personAddBtn"></button></div></div>
+  <div id="challengeModal" class="person-modal hidden"><div class="person-card"><span class="person-pfp" id="challengePfp"></span><div class="person-name" id="challengeName"></div><div class="person-user" id="challengeUser"></div><div class="challenge-actions"><button class="mini-btn" id="challengeAcceptBtn">Accept</button><button class="mini-btn grey" id="challengeDeclineBtn">Decline</button></div></div></div>
+  <div id="cropModal" class="person-modal hidden"><div class="person-card crop-card"><div class="crop-title">Crop your photo</div><div class="crop-viewport" id="cropViewport"><img id="cropImg" alt=""></div><input type="range" id="cropZoom" min="1" max="3" step="0.01" value="1" aria-label="Zoom"><div class="crop-hint">Drag to move, slide to zoom</div><div class="challenge-actions"><button class="mini-btn grey" id="cropCancelBtn">Cancel</button><button class="mini-btn" id="cropUseBtn">Use photo</button></div></div></div>
+  <div id="tenLetterModal" class="person-modal hidden"><div class="person-card"><button class="person-close" id="tenLetterCloseBtn" aria-label="Close list">×</button><div class="crop-title">10 letter words</div><div id="tenLetterList" class="ten-letter-list"></div></div></div>
+  <div id="signOutModal" class="person-modal hidden"><div class="person-card"><div class="crop-title">Are you sure?</div><p class="small">You will be signed out of Duello.</p><div class="challenge-actions"><button class="mini-btn grey" id="signOutCancelBtn">Cancel</button><button class="mini-btn" id="signOutConfirmBtn">Sign out</button></div></div></div>
+  <!-- v152: delete confirmation is a modal window like sign-out, not
+       a page any more. The confirm + code steps live inside it. -->
+  <div id="deleteModal" class="person-modal hidden"><div class="person-card"><div class="crop-title">Delete account?</div><p class="small">This permanently deletes your account, games, elo, and stats. This cannot be undone.</p><p id="editDeleteError" class="error"></p><div class="edit-actions stacked" id="editDeleteActions"><button class="btn cancel" type="button" id="editDeleteCancelBtn">Keep my account</button><button class="btn danger" type="button" id="editDeleteConfirmBtn">Yes, delete my account</button></div><div id="editDeleteCode" class="hidden"><p class="small" id="editDeleteCodeMsg"></p><div class="edit-field"><label for="editDeleteCodeInput">Code</label><input id="editDeleteCodeInput" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code"></div><p id="editDeleteCodeError" class="error"></p><div class="edit-actions stacked"><button class="btn primary" type="button" id="editDeleteCodeVerifyBtn">Delete my account</button><button class="btn cancel" type="button" id="editDeleteCodeBackBtn">Back</button></div><button class="link" id="editDeleteCodeResendBtn" type="button">Send a new code</button></div></div></div>
+</div>
+<script>
+(function () {
+  function show(msg) {
+    var box = document.getElementById('bootError');
+    if (box) { box.style.display = 'block'; box.textContent = msg; }
+  }
+  window.addEventListener('error', function (e) {
+    if (!e.message) return;
+    show('Error: ' + e.message + (e.filename ? ' @ ' + e.filename + ':' + e.lineno + ':' + e.colno : ''));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    show('Error: ' + (r && r.message ? r.message : String(r)));
+  });
+})();
+</script>
+<script>
+// Service worker (web only): the iOS shell is bundled and must never
+// register one, so skip entirely under Capacitor. Registered after load,
+// guarded so a failure can never break the page.
+(function () {
+  try {
+    if (typeof window === 'undefined' || typeof window.Capacitor !== 'undefined') return;
+    if (!('serviceWorker' in navigator)) return;
+    window.addEventListener('load', function () {
+      try {
+        navigator.serviceWorker.register('/sw.js').catch(function () {});
+      } catch (e) {}
+    });
+  } catch (e) {}
+})();
+</script>
+<script src="/engine.js?v=157" onerror="var b=document.getElementById('bootError');if(b){b.style.display='block';b.textContent='Duello code failed to load. Check your connection and reload.';}"></script>
+<script src="/app.js?v=157" onerror="var b=document.getElementById('bootError');if(b){b.style.display='block';b.textContent='Duello code failed to load. Check your connection and reload.';}"></script></body></html>

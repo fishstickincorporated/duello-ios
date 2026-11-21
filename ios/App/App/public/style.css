@@ -1,0 +1,832 @@
+*{box-sizing:border-box} body{margin:0;background:#1a1d24;color:#e8ecf1;font-family:"Comfortaa",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+/* v135: the dot texture is a FIXED layer so content scrolls over it.
+   The fixed-attachment trick is unreliable on iOS Safari, so the
+   dots live on body::before (position:fixed, inset:0, same 16px
+   grid, same .07 opacity). z-index:-1 puts it behind all screen
+   content — z-index:0 would paint the dots OVER the non-positioned
+   .screen content — while staying above the body's solid #1a1d24
+   canvas background. pointer-events:none so it never intercepts
+   taps. It covers the whole viewport including the top safe area /
+   Dynamic Island. */
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(rgba(3,234,255,.07) 1px,transparent 1.4px);background-size:16px 16px}
+/* v145: the game screen has no textured background — the dot grid
+   stays everywhere else (home, tabs, puzzle) but hides on the board. */
+body.game-open::before{display:none}
+.screen{max-width:390px;margin:0 auto;padding:calc(28px + env(safe-area-inset-top)) 16px 40px;text-align:center}
+.hidden{display:none!important}
+.logo{font-size:56px;font-weight:900;letter-spacing:3px;color:#03eaff;line-height:1;margin:12px 0 4px}
+.logo.small-logo{font-size:36px}
+.logo-img{display:block;width:88%;height:auto;margin:8px auto 12px}
+.logo-img.home-logo{width:100%;margin-top:4px}
+.logo-img.small-logo-img{width:64%;margin:4px auto 10px}
+.auth-heading{font-size:24px;font-weight:800;margin:6px 0 16px}
+.tagline{color:#b3b2b1;margin:0 0 20px}
+input{width:100%;padding:12px;margin:6px 0;border-radius:10px;border:1px solid #333;background:#262a33;color:#fff;font-size:16px}
+.btn,.mode,.bot-opt,.controls button,.back-pill{cursor:pointer;border:0;border-radius:14px}
+.btn.primary{background:#03eaff;color:#1a1d24;padding:12px;width:100%;font-size:17px;margin-top:10px;border:2px solid #03eaff}
+.link{background:none;border:0;color:#03eaff;margin-top:14px;font-size:15px;cursor:pointer}
+.link.danger{color:#ff1303}
+.error{color:#ff7a7a;min-height:20px}.success{color:#03eaff;min-height:20px}.small{color:#b3b2b1;font-size:12px;line-height:1.5}
+.pw-wrap{position:relative}.pw-wrap input{padding-right:44px}.pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1;touch-action:manipulation}.pw-eye svg{display:block}.pw-eye.on svg{stroke:#03eaff}
+.pw-reqs{list-style:none;margin:2px 0 8px;padding:0;text-align:left}.pw-reqs li{color:#b3b2b1;font-size:12px;line-height:1.6}.pw-reqs li::before{content:"○ "}.pw-reqs li.met{color:#03eaff}.pw-reqs li.met::before{content:"✓ "}
+.modes{display:flex;flex-direction:column;gap:24px;margin-top:24px}
+.mode{background:linear-gradient(180deg,#404552 0%,#2b303c 100%);color:#fff;height:64px;padding:0 8px 0 14px;display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:8px;font-size:18px;border:2px solid #03eaff;border-radius:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 8px 0 #005a6e}
+.mode.greyed{background:linear-gradient(180deg,#404552 0%,#2b303c 100%);color:#b3b2b1;border:2px solid #3c424e;box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 8px 0 #1e222b;cursor:not-allowed;opacity:.55}
+.mode .label{flex:1;text-align:left}
+.mode .sym{flex:0 0 auto}
+.mode .chev{font-size:30px;line-height:1;color:#03eaff}
+.mode.greyed .chev{color:#b3b2b1}
+.mode .soon{background:#23262e;color:#b3b2b1;border-radius:20px;padding:4px 10px;font-size:11px;letter-spacing:1px;white-space:nowrap}
+/* v148: the Daily Puzzle countdown pill is a FIXED width, the same
+   size whether it shows "Solved" or the ticking countdown, so it
+   never changes size as the clock ticks. v150: the countdown renders
+   in Arial with tabular numbers — Comfortaa's digits are
+   proportional (a narrow "1" is narrower than "0"), so the text
+   wobbled as it ticked even inside the fixed pill. In Arial the
+   widest countdown ("23:59:59") is ~43px, so 72px has ample slack,
+   and the text is centred in it (box-sizing is border-box globally,
+   so 72px includes the padding). */
+#puzzleSolvedTag{width:72px;text-align:center;font-variant-numeric:tabular-nums}
+.sym{font-size:34px;line-height:1}.sym.white{color:#fff}.sym.red-disc{background:#ff1303;border-radius:50%;width:52px;height:52px;display:flex;align-items:center;justify-content:center;font-size:30px}
+.sym.fishstick{width:52px;height:52px;border-radius:50%;background:#bfe3ff;position:relative;display:block}
+.sym.fishstick::before{content:"";position:absolute;left:8px;top:14px;width:36px;height:24px;background:#e0a83c;border-radius:12px}
+.sym.fishstick::after{content:"• •";position:absolute;left:16px;top:18px;font-size:14px;color:#222}
+.sym.fishstick-img{width:52px;height:52px;border-radius:50%;object-fit:cover}
+.bot-options{display:flex;flex-direction:column;gap:24px;margin-top:24px;align-items:center}
+.bot-opt{background:linear-gradient(180deg,#404552 0%,#2b303c 100%);color:#fff;padding:0 8px 0 14px;height:64px;width:100%;display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:8px;font-size:18px;border:2px solid #03eaff;border-radius:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 8px 0 #005a6e}
+.bot-opt .label{flex:1;text-align:left}
+.bot-opt .label-col{flex:1;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
+.bot-opt .label-col .label{flex:none}
+.bot-opt .sub{font-size:12px;color:#b3b2b1;font-weight:400}
+.bot-opt .sym{flex:0 0 auto}
+.bot-opt .chev{font-size:30px;line-height:1;color:#03eaff}
+.back-pill{display:block;background:#6b7280;color:#fff;padding:8px 18px;border-radius:20px;margin:22px auto 0;font-size:14px}
+.scoreboard{display:flex;flex-direction:row;gap:6px;margin-top:4px;margin-bottom:0;width:auto;margin-left:0;margin-right:0}
+/* Each player's panel is three columns with NO visible separation
+between them (gap 0, no dividers). Opponent panel is the mirror image:
+player = identity | score | clock, opponent = clock | score | identity.
+Dimensions are fixed and rigid: same width/height always, so a long
+name or a big score never reflows the board. Names never wrap. */
+.panel{display:flex;flex-direction:column;flex:1 1 0;min-width:0;height:auto;overflow:hidden;border:2px solid transparent;background:#262a33}
+.panel-top{display:flex;align-items:stretch;flex:1}
+.player-panel{border-radius:12px}
+.bot-panel{border-radius:12px}
+.panel.active{border-color:#03eaff}
+.panel .col{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.panel .identity-col{flex:0 0 92px;padding:4px 4px}
+.panel .clock-col{flex:1 1 100px;min-width:50px;padding:4px 4px 4px;font-variant-numeric:tabular-nums;font-weight:700;justify-content:flex-start}
+.player-panel .identity-col{text-align:left;align-items:flex-start;padding-left:6px;padding-right:2px}
+.player-panel .clock-col{text-align:right;align-items:flex-end;padding-right:6px}
+.bot-panel .identity-col{text-align:right;align-items:flex-end;padding-right:6px;padding-left:2px}
+.bot-panel .clock-col{text-align:left;align-items:flex-start;padding-left:6px}
+.panel .game-score{font-size:32px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1;color:#03eaff}
+.panel .pfp{width:32px;height:32px;flex:0 0 32px;border-radius:50%;overflow:hidden;background:#3a3f4b;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1}.panel .pfp img{width:32px;height:32px;border-radius:50%;object-fit:cover;display:block;margin:0}.panel .pfp svg{width:32px;height:32px;display:block}
+.panel .pfp.gone{opacity:.35;filter:grayscale(1)}
+.panel .pfp.clear-bg,.stat-pfp .pfp.clear-bg,.stat-box-head .pfp.clear-bg{background:transparent}
+.bot-panel .pfp img{margin-left:auto}
+.panel .name{font-weight:700;font-size:10px;line-height:1.25;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* v135: "Doppelgänger" at 11px bold is 83.6px wide — too wide for the
+   old 76px identity column (68px of text room), so it ellipsized.
+   The column is now 92px (84px of text room) and the name 10px
+   (76.0px), so the full word fits with room to spare. The clock
+   ("4:00" = 64px at 32px Arial bold) still fits in what is left of
+   the panel down to a 375px-wide phone. The ellipsis stays as a
+   safety net for even longer names. */
+.panel .elo{color:#03eaff;font-size:12px;line-height:1.25;white-space:nowrap}
+.panel .elo.inf{font-size:20px;line-height:15px}
+.panel .clock{font-size:32px;line-height:1.1}
+/* v157 byoyomi: the 12s countdown sits on the scoreboard outside the
+   regular clock, on the side closer to the PFP (left of the human
+   clock, right of the bot clock — the panels are mirrored). The
+   clock-row keeps the two on one line; the clock must not take the
+   full row width (the .panel .clock width:100% rule below would),
+   or the countdown is pushed out. Red #ff1303: urgent at a glance. */
+.clock-row{display:flex;flex-direction:row;align-items:baseline;gap:6px}
+.panel .clock-row .clock{width:auto;flex:0 0 auto}
+.byoyomi{font-size:22px;line-height:1.1;font-weight:900;color:#ff1303;font-variant-numeric:tabular-nums;flex:0 0 auto;white-space:nowrap}
+/* v157 layout fix: the countdown + clock need ~101px but the
+   clock-col is only 86px, so without this the panel's
+   overflow:hidden clips the clock (it read "1" with ":59" cut
+   off) and the bot countdown overlapped the PFP. While a panel
+   carries the countdown, narrow its identity-col (the name
+   already ellipsises) and shrink its clock/countdown so the
+   row fits: clock 28px (56px) + gap 4px + countdown 20px
+   (~39px) = ~99px in a ~104px clock-col. */
+.panel.byoyomi-on .identity-col{flex-basis:64px}
+.panel.byoyomi-on .clock{font-size:28px}
+.panel.byoyomi-on .clock-row{gap:4px}
+.panel.byoyomi-on .byoyomi{font-size:20px}
+.lastplay{display:block;color:#b3b2b1;font-size:11px;font-weight:400;line-height:14px;white-space:nowrap;overflow:hidden;padding:2px 6px;height:18px;box-sizing:border-box;margin:0;text-align:left}
+.lastplay.from-human{text-align:left}
+.lastplay.from-bot{text-align:right}
+.lastplay .pts{color:#03eaff;font-weight:700}
+.lastplay .bingo{color:#ffd166;font-weight:800;white-space:nowrap}
+.board{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;width:100%;aspect-ratio:1;background:#11131a;padding:3px;border-radius:10px}
+.cell{aspect-ratio:1;border-radius:8px;background:#262a33;display:flex;align-items:center;justify-content:center;font-size:11px;color:#b3b2b1;position:relative}
+.cell.DL,.cell.TL,.cell.DW,.cell.TW{font-family:"Comfortaa",sans-serif}.cell.DL{background:#ff1303;color:#fff;-webkit-text-fill-color:#fff;font-size:15px;font-weight:800;text-shadow:-0.75px 0 0 #000,0.75px 0 0 #000,0 -0.75px 0 #000,0 0.75px 0 #000,-0.75px -0.75px 0 #000,-0.75px 0.75px 0 #000,0.75px -0.75px 0 #000,0.75px 0.75px 0 #000}.cell.TL{background:#1cff03;color:#fff;-webkit-text-fill-color:#fff;font-size:15px;font-weight:800;text-shadow:-0.75px 0 0 #000,0.75px 0 0 #000,0 -0.75px 0 #000,0 0.75px 0 #000,-0.75px -0.75px 0 #000,-0.75px 0.75px 0 #000,0.75px -0.75px 0 #000,0.75px 0.75px 0 #000}.cell.DW{background:#ff8d03;color:#fff;-webkit-text-fill-color:#fff;font-size:15px;font-weight:800;text-shadow:-0.75px 0 0 #000,0.75px 0 0 #000,0 -0.75px 0 #000,0 0.75px 0 #000,-0.75px -0.75px 0 #000,-0.75px 0.75px 0 #000,0.75px -0.75px 0 #000,0.75px 0.75px 0 #000}.cell.TW{background:#ff03ee;color:#fff;-webkit-text-fill-color:#fff;font-size:15px;font-weight:800;text-shadow:-0.75px 0 0 #000,0.75px 0 0 #000,0 -0.75px 0 #000,0 0.75px 0 #000,-0.75px -0.75px 0 #000,-0.75px 0.75px 0 #000,0.75px -0.75px 0 #000,0.75px 0.75px 0 #000}
+.inner-glow{position:absolute;left:calc(20% + 2.4px);top:calc(20% + 2.4px);width:calc(60% - 4.8px);height:calc(60% - 4.8px);display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(6,1fr);gap:3px;pointer-events:none;z-index:5;opacity:0;transition:opacity 200ms}
+.inner-glow.on{opacity:1}
+.inner-glow .glow-cell{border-radius:8px;aspect-ratio:1;animation:glow 3.2s ease-in-out infinite}
+@keyframes glow{0%,100%{box-shadow:inset 0 0 0 2px rgba(3,234,255,.35)}50%{box-shadow:inset 0 0 0 2px rgba(3,234,255,.9)}}
+.tile{width:100%;height:100%;border-radius:8px;overflow:hidden;background:linear-gradient(180deg,#7df3ff 0%,#03eaff 50%,#00b8d2 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.65),inset 0 -2px 0 rgba(0,90,110,.35);color:#1a1d24;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;position:relative;cursor:grab;user-select:none;touch-action:none}
+.tile svg,.drag-ghost svg{width:100%;height:100%;display:block;pointer-events:none}
+.tile.pending{outline:1px solid #ffd166}
+/* Board tiles must cover their whole cell even if a premium label is ever
+present again; a flex-shared cell previously squeezed them to half width. */
+.cell .tile{position:absolute;inset:0;width:auto;height:auto}
+.cell.last-word .tile{outline:1px solid #fff}
+.status{display:flex;align-items:center;justify-content:center;min-height:22px;margin:3px 0;padding:8px 0;font-size:15px;line-height:1.3;white-space:nowrap}
+/* v148: in a game review, the "___ played ___" line is Duello blue. */
+.status.review-played{color:#03eaff}
+.rack{display:flex;gap:6px;justify-content:space-between;margin:8px 0;min-height:57px}
+.rack .tile{width:52px;flex:1;aspect-ratio:1;font-size:30px;transition:transform 100ms ease,opacity 100ms ease}
+.rack.greyed{opacity:.55}
+.controls{display:flex;gap:6px;margin-top:10px}
+.controls button{flex:1;height:46px;padding:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#3a3f4b;color:#e8ecf1;border:2px solid transparent;font-size:14px;font-weight:700;touch-action:manipulation;user-select:none;-webkit-tap-highlight-color:transparent}
+.controls button:not(:disabled){border-color:#03eaff}
+.controls button.armed-red{background:#ff1303;color:#fff;border-color:transparent}
+.controls button .penalty{display:block;font-size:11px;line-height:1.2;font-weight:700}
+.controls button:disabled{background:#3a3f4b;color:#b3b2b1;border-color:transparent}
+#endButtons #mainMenuBtn,#endButtons #gameStatsBtn,.stat-window #statMainMenu{background:#3a3f4b;color:#e8ecf1}
+#endButtons #playAgainBtn,.stat-window #statPlayAgain{background:#03eaff;color:#1a1d24}
+#playBtn.play-valid{background:#03eaff;color:#1a1d24;border-color:#03eaff}
+#playBtn.play-invalid{background:#3a3f4b;color:#b3b2b1;border-color:transparent}
+#playBtn.validating{background:#3a3f4b;color:#b3b2b1;border-color:transparent}
+.stat-window{position:fixed;inset:0;background:rgba(5,7,10,.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;z-index:10;overflow:hidden}
+.stat-window>div{max-width:390px;width:100%}
+#gameLogo{margin:0 auto 12px}
+.stat-window .stat-top{display:flex;justify-content:space-between;align-items:center;background:#262a33;border:2px solid #e8ecf1;border-radius:16px;padding:16px}
+.stat-pfp{display:flex;flex-direction:column;align-items:center;gap:4px}.stat-pfp img{width:44px;height:44px;border-radius:50%;object-fit:cover}
+.pfp.big{font-size:36px}.elo-move{font-weight:800;min-height:20px;line-height:20px}.elo-move.neg{color:#ff7a7a}.elo-move.pos{color:#4ade80}
+.stat-score{font-size:28px;font-weight:900}.stat-reason{text-align:center;margin:12px 0;color:#cbd5e1}
+.stat-grid{background:#262a33;border:2px solid #e8ecf1;border-radius:16px;padding:14px;text-align:left;font-size:14px;line-height:1.7}
+#gameDim.dimmed{filter:brightness(.35)}
+.def-popover{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);background:#262a33;border:1px solid #03eaff;border-radius:12px;padding:12px;max-width:360px;width:90%;z-index:20;text-align:left;font-size:13px;line-height:1.5}
+.def-popover .def-close{position:absolute;top:4px;right:8px;background:none;border:0;color:#e8ecf1;font-size:22px;line-height:1;cursor:pointer;padding:4px}
+.def-popover .def-body{padding-right:24px}
+.def-credit{margin-top:10px;font-size:11px;color:#8a8f9c;text-align:center}
+/* Person profile window: tapping a name anywhere (Global, search,
+   stat window) opens this over the current screen. */
+.person-modal{position:fixed;inset:0;background:rgba(5,7,10,.78);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+/* Challenge window: same overlay/card as the profile window, with
+   Accept / Decline big enough to tap in a modal. */
+.challenge-actions{display:flex;gap:10px;justify-content:center;margin-top:16px}
+.challenge-actions .mini-btn{padding:10px 18px;font-size:15px}
+.challenge-actions .mini-btn.grey{border:1px solid #03eaff;background:transparent;color:#fff}
+.person-card{position:relative;background:#262a33;border:2px solid #e8ecf1;border-radius:16px;padding:24px 20px 20px;width:100%;max-width:320px;text-align:center}
+.person-close{position:absolute;top:6px;right:10px;background:none;border:0;color:#e8ecf1;font-size:24px;line-height:1;cursor:pointer;padding:4px}
+.person-pfp{display:inline-flex;width:64px;height:64px;border-radius:50%;overflow:hidden;background:#3a3f4b;align-items:center;justify-content:center}
+.person-pfp img{width:64px;height:64px;border-radius:50%;object-fit:cover}
+.person-pfp svg{width:64px;height:64px;display:block}
+.person-pfp.no-photo{border:2px solid #03eaff}
+.person-name{font-size:18px;font-weight:800;margin-top:10px}
+.person-user{color:#b3b2b1;font-size:14px;margin-top:2px}
+/* Photo crop (v92): the viewport is a circle, like every pfp — what
+   you frame is what you get. The image is absolutely positioned and
+   moved with a transform, so dragging never scrolls the page. */
+.crop-card{max-width:340px}
+.crop-title{font-size:18px;font-weight:800;margin-bottom:14px}
+.crop-viewport{position:relative;width:280px;height:280px;margin:0 auto;border-radius:50%;overflow:hidden;background:#11131a;touch-action:none;cursor:grab}
+.crop-viewport:active{cursor:grabbing}
+.crop-viewport img{position:absolute;left:50%;top:50%;max:none;pointer-events:none}
+.crop-viewport::after{content:'';position:absolute;inset:0;border-radius:50%;border:2px solid #03eaff;pointer-events:none}
+#cropZoom{width:280px;margin:16px auto 0;display:block;accent-color:#03eaff}
+.crop-hint{color:#b3b2b1;font-size:13px;margin-top:8px}
+.person-elo{color:#b3b2b1;font-size:14px;margin:12px 0 2px}
+.person-elo span{font-family:Arial,Helvetica,sans-serif;font-weight:800;color:#03eaff}
+.person-rank{color:#b3b2b1;font-size:14px;margin:0 0 12px}
+.person-rank span{font-family:Arial,Helvetica,sans-serif;font-weight:800;color:#03eaff}
+.person-add{background:#3a3f4b;color:#e8ecf1;border:2px solid #03eaff;border-radius:12px;padding:10px 16px;font-family:Comfortaa,sans-serif;font-size:14px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;width:180px;height:56px}
+.sent-text{line-height:1}
+.person-add.sent{border-color:#b3b2b1;color:#b3b2b1}
+.person-add:disabled{opacity:.6;cursor:default;border-color:#b3b2b1;color:#b3b2b1}
+.person-add svg{display:block}
+.drag-ghost{position:fixed;width:92px;height:92px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#7df3ff 0%,#03eaff 50%,#00b8d2 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.65),inset 0 -2px 0 rgba(0,90,110,.35);color:#1a1d24;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;z-index:60;pointer-events:none;transform:translate(-50%,-90%)}
+
+/* Bottom tabs: main menu only, no text under icons */
+.tab-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:390px;display:flex;justify-content:space-around;align-items:center;background:#1a1d24;border-top:1px solid #2a2f3a;padding:14px 0 calc(10px + env(safe-area-inset-bottom));z-index:40}
+/* v146: every tab button is exactly 40px tall with its icon centered,
+   so the top pixel of all three tabs sits at the same height; the active
+   ring is an inset shadow, not an outline — the 2px outline used to poke
+   above the active tab's top and make it look taller than the rest. */
+.tab-btn{background:none;border:0;cursor:pointer;padding:6px 18px;border-radius:12px;height:40px;display:flex;align-items:center;justify-content:center}
+.tab-btn.active{background:#262a33;box-shadow:inset 0 0 0 2px #03eaff}
+.tab-btn svg,.tab-btn img{display:block;width:28px;height:28px}
+.tab-btn img{border-radius:50%;object-fit:cover}
+.screen{padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+.hint{color:#b3b2b1;font-size:13px;margin:2px 0 8px;text-align:left}
+/* Friends tab: no logo, search with padding above */
+.search-wrap{display:flex;align-items:center;gap:8px;background:#262a33;border:1px solid #333;border-radius:12px;padding:4px 10px;margin-top:18px}
+.search-wrap input{border:0;background:transparent;margin:0;padding:10px 4px}
+.search-wrap input:focus{outline:none;box-shadow:none}
+.search-icon{font-size:18px}
+.search-results{text-align:left}
+.search-result,.request-row{display:flex;align-items:center;gap:10px;background:#262a33;border-radius:12px;padding:10px 12px;margin:8px 0;text-align:left}
+.request-actions{margin-left:auto;display:flex;gap:6px}
+/* Leaderboard rows are a grid, not flex: rank | pfp | name | Elo |
+action, every column fixed-width except the name. The old flex row
+let the Elo sit wherever the name and the button ended, so Elos
+wandered left and right down the list; now every Elo lands in the
+same 52px column, right-aligned, on every row including your own
+(the empty action slot keeps it there). */
+.lb-row{display:grid;grid-template-columns:22px 36px minmax(0,1fr) 36px 44px;align-items:center;gap:6px;background:#262a33;border-radius:12px;padding:10px 12px;margin:8px 0;text-align:left}
+/* Search rows show no rank: the rank column is dropped and the
+   other pieces shift left one column, keeping their alignment. */
+.lb-row.no-rank{grid-template-columns:36px minmax(0,1fr) 36px 44px}
+.lb-row.no-rank .lb-pfp{grid-column:1}
+.lb-row.no-rank .lb-identity{grid-column:2}
+.lb-row.no-rank .lb-action{grid-column:3}
+.lb-row.no-rank .lb-elo{grid-column:4}
+.lb-row .rank{color:#ffd166;font-weight:900;font-size:18px;text-align:left;grid-column:1}
+/* A 3-digit rank (100+ friends, or a Global true rank past 99)
+   drops a size so it still fits its narrow column without
+   touching the picture. */
+.lb-row .rank.small{font-size:14px}
+.lb-identity{min-width:0;overflow:hidden;grid-column:3}
+.lb-row .lb-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-row .lb-user{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-pfp{width:36px;height:36px;flex:0 0 36px;border-radius:50%;overflow:hidden;background:#3a3f4b;display:flex;align-items:center;justify-content:center}
+.lb-pfp img{width:36px;height:36px;border-radius:50%;object-fit:cover;display:block}
+.lb-pfp svg{width:36px;height:36px;display:block}
+.pfp.no-photo,.lb-pfp.no-photo{border:2px solid #03eaff;box-sizing:border-box}
+.lb-pfp{flex:0 0 36px}.lb-pfp svg{display:block}
+.lb-row .lb-name{color:#03eaff;font-weight:800;font-size:18px}
+.lb-row .lb-user{color:#b3b2b1;font-size:14px}
+.lb-row .lb-elo{color:#03eaff;font-weight:800;font-size:18px;text-align:right;font-variant-numeric:tabular-nums;grid-column:5}
+.lb-play{background:none;border:2px solid #03eaff;border-radius:50%;color:#03eaff;cursor:pointer;width:36px;height:36px;padding:0;display:flex;align-items:center;justify-content:center;justify-self:center}
+.lb-play svg{display:block}
+.lb-action{width:36px;display:flex;align-items:center;justify-content:center;justify-self:center;grid-column:4}
+.lb-row .lb-pfp{grid-column:2}
+.lb-row .lb-play{grid-column:4}
+.lb-name{cursor:pointer}
+.searching-box,.rematch-box{display:flex;flex-direction:column;align-items:center;gap:16px;margin-top:60px;text-align:center}
+.searching-dots{display:flex;gap:8px}
+.searching-dots span{width:12px;height:12px;border-radius:50%;background:#03eaff;animation:searchPulse 1s ease-in-out infinite}
+.searching-dots span:nth-child(2){animation-delay:.2s}
+.searching-dots span:nth-child(3){animation-delay:.4s}
+@keyframes searchPulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+.searching-text,.rematch-text{font-size:18px;font-weight:800}
+.rematch-box .controls{width:100%}
+.lb-row.you{outline:2px solid #03eaff}
+.you-badge{background:#03eaff;color:#1a1d24;font-size:11px;font-weight:800;border-radius:8px;padding:2px 6px}
+.lb-row .you-badge{padding:2px 4px;white-space:nowrap}
+.pending-label{color:#ffd166;font-size:12px;font-weight:700}
+.leaderboard-head{display:flex;align-items:center;justify-content:space-between;margin:22px 0 0}
+.leaderboard-label{font-weight:900;letter-spacing:1px;font-size:18px}
+.pencil{background:none;border:0;font-size:20px;cursor:pointer}
+.pencil.active path{stroke:#03eaff}
+.lb-delete{background:none;border:0;color:#ff1303;cursor:pointer;width:36px;height:36px;padding:0;display:flex;align-items:center;justify-content:center;justify-self:center;font-size:24px;line-height:1;grid-column:4}
+/* The row being confirmed gives its action column room for the
+   "Remove?" button, so the Elo keeps its far-right column. */
+.lb-row.confirming{grid-template-columns:22px 36px minmax(0,1fr) 84px 44px}
+.lb-remove-confirm{background:transparent;color:#ff1303;border:2px solid #ff1303;border-radius:8px;cursor:pointer;font-size:14px;font-weight:800;padding:4px 6px;white-space:nowrap;grid-column:4;justify-self:center}
+.leaderboard-tabs{display:flex;gap:8px;margin:10px 0}
+.lb-tab{flex:1;padding:10px;border:0;border-radius:10px;background:#262a33;color:#e8ecf1;cursor:pointer;font-weight:800;font-size:18px}
+.lb-tab.active{background:#03eaff;color:#1a1d24}
+.no-friends-card{background:#262a33;border-radius:12px;padding:16px;margin-top:12px;color:#b3b2b1}
+/* Profile tab: no logo, extra padding above pfp */
+#profileScreen{position:relative}
+.profile-top{padding-top:8px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.pfp.huge{width:84px;height:84px;border-radius:50%;background:#262a33;display:flex;align-items:center;justify-content:center;font-size:44px;overflow:hidden}
+.pfp.huge img{width:100%;height:100%;object-fit:cover}
+.pfp.huge svg{width:84px;height:84px;display:block}
+.profile-name{font-size:22px;font-weight:900;margin-top:4px}
+.profile-username{color:#b3b2b1}
+.profile-joined{color:#b3b2b1;font-size:14px;margin-top:4px}
+/* v135: the gear is pinned to the top right of the profile screen
+   instead of sitting at the bottom of the centered column. top
+   matches the screen's top padding (28px + safe-area inset) and
+   right:16px matches its horizontal padding. The pfp is centered
+   and the gear is at the right edge, so they clear each other. */
+.gear-btn{position:absolute;top:calc(28px + env(safe-area-inset-top));right:16px;background:none;border:0;font-size:26px;cursor:pointer;margin-top:0}
+.elo-box{background:#262a33;border-radius:16px;padding:16px;margin:8px 0 16px;text-align:left}
+.elo-row{display:flex;gap:12px}
+.elo-row>div{flex:1}
+.elo-row>div:nth-child(2){text-align:center}
+.elo-row>div:last-child{text-align:right}
+.elo-label{color:#b3b2b1;font-size:13px}
+.elo-big{font-size:24px;font-weight:900;font-family:Arial, Helvetica, sans-serif}
+.chart-toggles{display:flex;gap:6px;margin:10px 0}
+.chart-toggle{flex:1;padding:6px;border:0;border-radius:8px;background:#1a1d24;color:#e8ecf1;cursor:pointer;font-size:13px;font-weight:700}
+.chart-toggle.active{background:#03eaff;color:#1a1d24}
+#eloChart{width:100%;background:#1a1d24;border-radius:10px}
+.stats-board{background:#262a33;border-radius:16px;padding:14px;margin-bottom:10px}
+.stats-tabs{display:flex;gap:6px;margin-bottom:10px}
+.stats-tab{flex:1;padding:9px;border:0;border-radius:10px;background:#1a1d24;color:#e8ecf1;cursor:pointer;font-weight:800;font-size:13px}
+.stats-tab.active{background:#03eaff;color:#1a1d24}
+.stats-list{text-align:left;font-size:15px;line-height:1.9}
+.stats-list .stat-line{display:flex;justify-content:space-between;border-bottom:1px solid #333}
+.stats-list .stat-line:last-child{border-bottom:0}
+.stats-list .stat-line[data-ten-letter]{cursor:pointer}
+/* A record word with a stored game/move (v128, item 6): the row is
+   tappable, and its value is Duello blue so it reads as a link to
+   that game's board at that move. */
+.stats-list .stat-line-clickable{cursor:pointer}
+.stats-list .stat-line-clickable b{color:#03eaff}
+/* Game History filter tabs (v128, item 4): the same three buttons as
+   the stats screen, same size and same active highlight. The tabs +
+   log sit on the same grey card as the lifetime stats (v130). */
+.history-board{background:#262a33;border-radius:16px;padding:14px;margin-bottom:10px}
+.history-tabs{display:flex;gap:6px;margin-bottom:10px}
+.history-tab{flex:1;padding:9px;border:0;border-radius:10px;background:#1a1d24;color:#e8ecf1;cursor:pointer;font-weight:800;font-size:13px}
+.history-tab.active{background:#03eaff;color:#1a1d24}
+/* Past Games list (v123, item 6): one row per finished game. */
+.past-games-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.past-game-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#1e222b;border:1px solid #333;border-radius:10px;padding:10px 12px;color:#fff;font-family:"Comfortaa",sans-serif;font-size:15px;cursor:pointer}
+.past-game-pic{flex:0 0 28px;width:28px;height:28px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#262a33;font-size:18px}
+.past-game-pic img{width:100%;height:100%;object-fit:cover;display:block}
+/* Fishstick (v126): the transparent PNG sits directly on the dark
+   row, not on a grey circle — no background, no round mask, and the
+   whole fishstick shows (contain, not cover). */
+.past-game-pic-plain{background:transparent;border-radius:0}
+.past-game-pic-plain img{object-fit:contain}
+.past-game-result{flex:0 0 26px;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.past-game-result.win{background:#1cff03;color:#111}
+.past-game-result.loss{background:#ff1303;color:#fff}
+.past-game-result.draw{background:#b3b2b1;color:#111}
+.past-game-opp{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:800}
+.past-game-opp-win{color:#03eaff}
+.past-game-opp-loss{color:#fff}
+.past-game-score{flex:0 0 auto}
+/* The score, not the username, carries the result colour (v128,
+   item 3): Duello blue for a win, white for a loss. Usernames stay
+   white in both cases. */
+.past-game-score-win{color:#03eaff;font-weight:800}
+.past-game-score-loss{color:#fff}
+.past-game-date{flex:0 0 auto;color:#b3b2b1;font-size:13px}
+.past-games-note{text-align:center;color:#b3b2b1;padding:16px 0}
+/* Game History (v124): the username under the heading, and the
+   Game History / Back to Profile buttons — the same size as the
+   Aggregate stats tab (padding 9px, 13px, 800 weight, 10px radius)
+   and Duello blue, so they read as on-brand buttons instead of the
+   unstyled default buttons they were. */
+.past-games-user{text-align:center;color:#b3b2b1;font-size:14px;font-weight:800;margin:0}
+/* Game History screen (v125): the heading, the @username line and the
+   game log are evenly spaced — one flex gap instead of ad-hoc margins. */
+#pastGamesScreen{display:flex;flex-direction:column;gap:16px}
+#pastGamesScreen.hidden{display:none!important}
+#pastGamesScreen .auth-heading{margin:0}
+/* v133: Back sits closer to Load more — the flex gap (16px) plus a
+   small top margin, instead of the .back-pill default 22px. */
+#pastGamesScreen #pastGamesBackBtn{margin-top:6px}
+#pastGamesScreen .past-games-list{margin-top:0}
+#pastGamesScreen .menu-btn{margin-top:0}
+.menu-btn{display:block;width:100%;padding:9px;border:0;border-radius:10px;background:#03eaff;color:#1a1d24;cursor:pointer;font-weight:800;font-size:13px}
+/* Replay arrows (v124): the shared back/forward row that sits in the
+   deck's place once the game is finished, above the buttons. Same
+   46px height and Duello-blue border as the game controls. */
+.replay-arrows{display:flex;gap:6px;margin-top:10px}
+.replay-arrows .replay-btn{flex:1;height:46px;padding:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#3a3f4b;color:#e8ecf1;border:2px solid transparent;border-radius:14px;font-size:20px;font-weight:700;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-tap-highlight-color:transparent}
+.replay-arrows .replay-btn:not(:disabled){border-color:#03eaff}
+.replay-arrows .replay-btn:disabled{background:#3a3f4b;color:#b3b2b1;border-color:transparent}
+.ten-letter-list{text-align:left;font-size:16px;line-height:2;max-height:50vh;overflow-y:auto;margin-top:8px}
+.ten-letter-word{border-bottom:1px solid #333}
+.ten-letter-word:last-child{border-bottom:0}
+/* A 10-letter word with a stored game/move (v128, item 6): tappable,
+   Duello blue, opens that game's board at that move. */
+.ten-letter-word-clickable{cursor:pointer;color:#03eaff}
+.email-row{display:flex;align-items:center;gap:8px}
+.email-row input{flex:1}
+.verified{font-size:18px}
+.btn.secondary{background:#262a33;color:#e8ecf1;padding:12px;width:100%;font-size:17px;margin-top:8px;border:2px solid #333}
+.edit-actions{display:flex;gap:12px;margin-top:6px}
+.edit-actions .btn{flex:1;margin-top:0}
+.edit-photo{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:12px}
+.edit-pfp-wrap{position:relative;cursor:pointer}
+.edit-pfp-wrap .pfp{filter:grayscale(0.7) brightness(0.65)}
+.edit-pfp-pencil{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.edit-pfp-pencil svg{filter:drop-shadow(0 1px 2px rgba(0,0,0,0.8))}
+.edit-field{display:flex;align-items:center;gap:10px;margin:6px 0}
+.edit-field label{flex:0 0 88px;color:#b3b2b1;font-size:14px}
+.edit-field input{margin:0;min-width:0}
+.edit-password{margin-top:12px}
+.btn.cancel{background:transparent;color:#03eaff;padding:12px;font-size:17px;border:2px solid #03eaff}
+.btn.danger{background:#ff1303;color:#fff;padding:12px;width:100%;font-size:17px;margin-top:10px;border:2px solid #ff1303}
+/* v151: the red-outline twin of .btn.danger — the destructive signal
+   (red) with the same size/shape/typography as the other settings
+   buttons. Used by Remove photo; the delete screen's red-outline
+   Delete is the same treatment, scoped to its own row. */
+.btn.danger-outline{background:transparent;color:#ff1303;border:2px solid #ff1303;padding:12px;width:100%;font-size:17px;margin-top:10px}
+.edit-delete{margin-top:12px}
+.privacy-link{text-align:center}
+.privacy-link a{color:#03eaff}
+/* Settings (gear) rows — v120 push toggle. iOS-style switch in Duello
+   blue when on; the row itself is hidden on the web, where there is
+   no push, and shown only under Capacitor. */
+.settings-section{margin-top:18px}
+/* v133: the single divider line — Push notifications sits above it,
+   Delete account / Definitions / Privacy Policy sit below it. */
+.settings-divider{border:0;border-top:1px solid #2a2f3a;margin:14px 0 0;padding:0}
+.setting-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 2px}
+.setting-label{font-size:15px;font-weight:700;color:#e8ecf1}
+.setting-sub{font-size:12px;color:#8a8f9c;margin-top:2px;line-height:1.35}
+.switch{flex:0 0 auto;width:52px;height:30px;border:0;border-radius:999px;background:#3a3f4b;cursor:pointer;padding:0;position:relative;transition:background .15s}
+.switch .switch-knob{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .15s}
+.switch.on{background:#03eaff}
+.switch.on .switch-knob{left:25px}
+.btn.blue-border{background:transparent;color:#03eaff;border:2px solid #03eaff;padding:12px;width:100%;font-size:17px;margin-top:10px}
+.mini-btn{background:#03eaff;color:#1a1d24;border:0;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px}
+.mini-btn.grey{background:#3a3f4b}
+.request-actions .mini-btn.grey{border:1px solid #03eaff;background:transparent;color:#fff}
+.mini-btn:disabled{background:#3a3f4b;color:#b3b2b1;cursor:not-allowed}
+/* Drag / shuffle fixes (bug 2 + 4) */
+.cell{ touch-action:none }
+.cell.drop-target{ outline:3px solid #ffd166; outline-offset:-3px }
+
+.rack.shuffling .tile{ animation:shuffle-pop 100ms ease-in-out }
+@keyframes shuffle-pop{ 0%{ transform:translateY(0) scale(1) } 50%{ transform:translateY(-8px) scale(1.06) rotate(2deg) } 100%{ transform:translateY(0) scale(1) } }
+
+/* Game screen: same 390px phone width as every other screen, so the
+   board stays phone-sized on a computer instead of stretching to the
+   full viewport. It used to override the cap with max-width:none,
+   which made the board huge and weird on desktop. The overlays
+   (stat window, definition popover, drag ghost) are position:fixed
+   and already phone-width, so the cap only affects the board, rack,
+   controls and scoreboard. */
+/* The old padding (4px 10px 12px) overrode .screen's safe-area
+   padding, so the logo slid under the Dynamic Island, and the screen
+   was only as tall as its content, leaving a dead gap below the
+   buttons. The screen is a full-height column now: the safe area
+   clears the island at the top and the home indicator at the bottom,
+   and the rack sits at the bottom of the screen (margin-top:auto on
+   #rack). svh last so the height stays stable when Safari's toolbar
+   hides; dvh/vh are the fallbacks. */
+#gameScreen{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;min-height:100svh;padding:calc(4px + env(safe-area-inset-top)) 10px calc(12px + env(safe-area-inset-bottom))}
+#gameScreen #gameDim{flex:1;display:flex;flex-direction:column}
+#gameScreen #rack{margin-top:auto}
+/* The rack + buttons sit a little closer to the status line: the
+   auto margin above the rack absorbs 40px less free space, so the
+   whole deck-and-buttons block shifts up 40px and the space below
+   the buttons grows by the same amount. */
+#gameScreen #gameDim>.controls{margin-bottom:40px}
+#gameScreen .board,#gameScreen .rack,#gameScreen .controls,#gameScreen #endButtons{width:100%}
+
+html,body,#board,.cell,.scoreboard,.rack,.tile,.status{user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.cell.drop-target{outline:none}
+
+
+.play-bubble{position:absolute;bottom:-10px;right:-10px;background:#ffd166;color:#1a1d24;-webkit-text-fill-color:#1a1d24;font-size:12px;font-weight:800;text-shadow:none;padding:2px 6px;border-radius:10px;z-index:50}
+.rack.instant .tile{transition:none}
+
+/* Countdown sits over the board only, so the number is in the exact
+   centre of the 10x10 board, not the centre of the phone screen. */
+.board-wrap{position:relative;width:100%}
+.countdown-overlay{position:absolute;inset:0;background:rgba(5,7,10,.55);display:flex;align-items:center;justify-content:center;z-index:15}
+.countdown-num{font-size:96px;font-weight:900;color:#fff}
+.countdown-num.waiting{font-size:22px;font-weight:700;line-height:1.4;text-align:center;max-width:320px}
+/* During the countdown the rack and buttons stay visible: the rack
+   is rendered as empty slots (see .tile.empty), so nothing jumps
+   when the letters appear after the wait. */
+#gameScreen.counting #rack,#gameScreen.counting .controls{visibility:visible}
+#rack .tile.empty,#puzzleRack .tile.empty{background:#262a33;box-shadow:none;cursor:default;z-index:0}
+#rack .tile:not(.empty){position:relative;z-index:1}
+.stat-winner{text-align:center;font-size:22px;font-weight:900;margin:0 0 12px}
+.stat-window>div{max-width:96vw}
+.stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:6px 0;border-bottom:1px solid #333}
+.stat-row:last-child{border-bottom:0}
+.stat-row .stat-label{font-weight:800}
+.sym svg{display:block;width:34px;height:34px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+.stat-grid{display:flex;gap:12px;background:none;border:0;padding:0}
+.stat-box{flex:1;min-width:0;background:#262a33;border:2px solid #e8ecf1;border-radius:16px;padding:14px;text-align:left;font-size:14px;line-height:1.7}
+/* v148: the Optimal moves tally is tappable (the dotted underline
+   hints it); the list it opens sits under the stat grid. */
+.opt-tally.tappable{cursor:pointer}
+.stat-optimal-list{background:#262a33;border:2px solid #e8ecf1;border-radius:16px;padding:12px 14px;margin-top:12px;text-align:left;font-size:14px;line-height:1.7}
+.stat-optimal-head{display:flex;justify-content:space-between;align-items:center;font-weight:800;margin-bottom:4px}
+.stat-optimal-close{background:none;border:0;color:#e8ecf1;font-size:22px;line-height:1;cursor:pointer;padding:0 4px}
+.stat-optimal-row{display:flex;gap:8px;padding:2px 0}
+.stat-optimal-empty{color:#b3b2b1}
+.stat-box-head{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:1px;margin-bottom:6px}
+/* v135: shrink the stat-box name so "Doppelgänger" fits whole next
+   to the 36px pfp. At 14px bold + 1px letter-spacing it is ~117px
+   wide — far wider than the ~97px (390px phone) / ~89.5px (375px
+   phone) of name room in a half-width stat box, so it spilled past
+   the box edge. At 11px with no letter-spacing it is 83.6px, which
+   fits both widths with room to spare. The ellipsis + nowrap are a
+   safety net so an even longer name can never spill past the box. */
+.stat-box-name{font-size:11px;letter-spacing:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stat-box-head .pfp{font-size:28px;line-height:1}
+.stat-box-head img{width:36px;height:36px;border-radius:50%;object-fit:cover;display:block}
+
+.stat-pfp .pfp{width:44px;height:44px;flex:0 0 44px;border-radius:50%;overflow:hidden;background:#3a3f4b;display:flex;align-items:center;justify-content:center}
+.stat-pfp .pfp svg{width:44px;height:44px;display:block}
+.stat-box-head .pfp{width:36px;height:36px;flex:0 0 36px;border-radius:50%;overflow:hidden;background:#3a3f4b;display:flex;align-items:center;justify-content:center}
+.stat-box-head .pfp svg{width:36px;height:36px;display:block}
+
+/* Scoreboard columns are hard boxes that can never encroach on each
+other. Root cause of the screenshot overlap: the clock column's
+last-play text ("passed -30s", ~66px) was wider than its 58px column,
+and with align-items:flex-end the text box grew leftwards past the
+column boundary into the score column. Now every text element is
+exactly its column's width, clipped/wrapped inside it, and the column
+itself clips anything left over. */
+.panel .col{overflow:hidden}
+.panel .name,.panel .elo,.panel .clock{width:100%;max-width:100%;box-sizing:border-box}
+.panel .name,.panel .elo,.panel .clock{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-box .stat-val{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400;color:#03eaff}
+.stat-box .stat-label{font-weight:800}
+
+/* Numbers anywhere in the game are Arial/Helvetica; words and letters stay
+   Comfortaa. Tile point values already use Arial inside their SVG. */
+.num,.game-score,.clock,.elo,.elo-move,.stat-score,.play-bubble,.countdown-num,.lastplay .pts,#puzzleSolvedTag{font-family:Arial, Helvetica, sans-serif}
+/* The one exception: the numbers in the profile stats list are Comfortaa
+   (the .num spans numify wraps digits in). Every other number stays Arial. */
+.stats-list .num{font-family:"Comfortaa",sans-serif}
+/* First-open intro (v96, v98: plays on every fresh open): black overlay, real logo starts zoomed in,
+pulls back fast, sits 2s, then zooms in fast to reveal Home. Tap to skip. The flicker
+squares are the premium colours, spread out across the whole screen. */
+#introOverlay{position:fixed;inset:0;background:#000;z-index:100;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#introFlicker{position:absolute;inset:0;pointer-events:none}
+#introFlicker .intro-cell{position:absolute;width:min(7vw,28px);aspect-ratio:1;opacity:0;animation-name:introCellFlicker;animation-timing-function:ease-in-out;animation-iteration-count:infinite}
+@keyframes introCellFlicker{0%,100%{opacity:0}30%,70%{opacity:.38}}
+#introInner{position:relative;z-index:1;display:flex;align-items:center;justify-content:center}
+#introLogoZoom{transform:scale(3)}
+#introLogo{display:block;width:min(88vw,340px);height:auto}
+
+/* ---------- v131: home redesign (faint blue texture + daily hook) ---------- */
+#homeScreen{position:relative;display:flex;flex-direction:column;min-height:100dvh;min-height:100svh;padding-bottom:128px}
+#homeScreen .logo-img.home-logo{width:72%;margin-bottom:0;position:relative;z-index:1}
+#homeScreen .home-head,#homeScreen .modes{position:relative;z-index:1}
+/* v154: the pfp sits centred between the logo and the Play Online
+   button by construction, not by margin arithmetic. v153 tuned the
+   header margins so the two gaps measured equal at 390x844 — but
+   the top safe-area inset (59px on a notched iPhone) eats the
+   centering slack in .modes, so on Jeff's phone the lower gap
+   collapsed to the 16px bottom margin while the upper gap stayed
+   44px. Three equal flex spacers (logo→header, header→buttons,
+   buttons→tab bar) split whatever free space the screen has, so
+   the two gaps stay equal at any height and any inset; each spacer
+   never shrinks below 8px, so the gaps stay open on short screens
+   too. The logo's bottom margin is zeroed above so the top spacer
+   is the whole logo→pfp gap. */
+.home-head{display:flex;align-items:center;gap:12px;margin:0;text-align:left}
+.home-spacer{flex:1 1 0;min-height:8px}
+.home-pfp{width:52px;height:52px;flex:0 0 52px;border-radius:50%;overflow:hidden;background:#3a3f4b;display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer}
+.home-pfp img{width:100%;height:100%;object-fit:cover;display:block}
+.home-pfp svg{width:52px;height:52px;display:block}
+/* v142: the stats stack vertically — Elo on top, streak below it, so
+   the star sits directly above the flame; both rows stay
+   left-justified to the right of the pfp. */
+.home-head-stats{display:flex;flex-direction:column;align-items:flex-start;gap:2px;flex:1;min-width:0}
+.home-stat{display:flex;align-items:center;gap:6px;min-width:0}
+/* v137: v135's header alignment (Elo flex:1 centered, streak pinned
+   right) is reverted — Elo and streak are left-justified again, in
+   order after the pfp, per the base .home-head-stats/.home-stat
+   rules above. v142 supersedes the row layout: the stats are a
+   column now, so the star is directly above the flame. */
+.home-stat-icon{display:flex;width:18px;flex:0 0 18px;justify-content:center}
+/* v142: the Duello Pro badge, right-justified in line with the pfp. */
+.home-pro{margin-left:auto;flex:0 0 40px;width:40px;height:40px;display:flex;align-items:center;justify-content:center}
+.home-pro svg{display:block}
+/* v149: when the account is on Free, the badge gives way to a blue
+   pill that opens the Duello Pro screen. The fill is a translucent
+   Duello blue over the dark background with a solid blue border, so
+   the blue text stays legible (render-verified). Same right-justified
+   spot as the badge; renderHomeHeader toggles which one shows. */
+.home-upgrade-pill{margin-left:auto;flex:0 0 auto;background:rgba(3,234,255,.14);border:1.5px solid #03eaff;color:#03eaff;border-radius:999px;padding:8px 13px;font-size:12px;font-weight:700;font-family:Comfortaa, sans-serif;white-space:nowrap;cursor:pointer}
+.home-stat-value{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.home-stat-label{color:#b3b2b1;font-size:12px}
+/* v146: home buttons are a fixed 100px (was flex:1, ~126px at 390x844)
+   with 24px gaps, centered in the available space. v148: a bit
+   shorter with a bit more space between them — 92px with 28px gaps
+   (4×92 + 3×28 = 452px, down from 472px, so the stack still fits). */
+#homeScreen .modes{flex:none;display:flex;flex-direction:column;gap:28px;margin-top:0}
+/* v139: icons even bigger and slightly further right, at Jeff's
+   request ("getting greedy"). Icons 44px→48px and left padding
+   8px→14px on both home and bot buttons (right padding stays 8px,
+   gap stays 8px, chevron stays 30px), so the icons sit 6px more
+   inward from the left edge. The bigger chrome shrinks the label
+   column to ~260px on a 390px screen (~245px on a 375px screen),
+   so the subtitle is 12px — the largest size that fits on one line
+   on both screens (Fishstick 239.3px vs a 244.8px column on 375px;
+   12.25px would fit by only 0.5px, too tight to trust). Title
+   stays 22px. The title/subtitle keep white-space:nowrap so they
+   can never wrap. */
+#homeScreen .mode{flex:0 1 92px;height:auto;font-size:22px}
+#homeScreen .mode .sym svg{width:48px;height:48px}
+/* v132: home buttons are big glossy gradient cards (Jeff's screenshot).
+   v133: darkened so the white text pops way more — each gradient runs
+   from its brand base color at the top to a darker shade of that same
+   color at the bottom. v134: muted ~22% toward neutral grey so the
+   colors read a little softer, less intense, while staying clearly
+   their color and keeping the white text pop: Online #1ed3e3→#1c8c9f,
+   Friends #32e31e→#28a81c, Bots #e38a1e→#c5761c, Puzzle #e31ed6→#b21ca7.
+   v139: faded further — every gradient stop is now rgba(...,0.8), so
+   20% of the dark page background (#1a1d24) shows through and the
+   colors read softer still, while the white text pops even more
+   (measured: white-text contrast improves at every stop, e.g.
+   Online top 1.83→2.65, Friends top 1.73→2.55, Bots top 2.65→3.73).
+   Borders, bottom shadows, textures, icons and text sizes unchanged.
+   The v131 textures are kept as a faint white overlay so the gradient
+   color dominates. */
+.mode-online{background:repeating-linear-gradient(115deg,rgba(255,255,255,.05) 0 6px,transparent 6px 14px),linear-gradient(180deg,rgba(30,211,227,.8) 0%,rgba(28,140,159,.8) 100%);border-color:#1c7b8c;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 0 #1c6270}
+.mode-friends{background:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(180deg,rgba(50,227,30,.8) 0%,rgba(40,168,28,.8) 100%);background-size:22px 22px,22px 22px,100% 100%;border-color:#26911c;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 0 #22741c}
+.mode-bots{background:radial-gradient(rgba(255,255,255,.07) 1.5px,transparent 1.5px),linear-gradient(180deg,rgba(227,138,30,.8) 0%,rgba(197,118,28,.8) 100%);background-size:16px 16px,100% 100%;border-color:#ac661c;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 0 #88541c}
+.mode-puzzle{background:repeating-linear-gradient(45deg,rgba(255,255,255,.06) 0 10px,transparent 10px 20px),linear-gradient(180deg,rgba(227,30,214,.8) 0%,rgba(178,28,167,.8) 100%);border-color:#971c8d;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 0 #761c6f}
+/* Text must pop on the bright gradients: bold white title and near-white
+   subtitle, both with a dark shadow; white chevron with a shadow too. */
+#homeScreen .mode .label-col{flex:1;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0;justify-content:center}
+#homeScreen .mode .label-col .label{flex:none;font-weight:700;text-shadow:0 2px 3px rgba(0,0,0,.45);white-space:nowrap}
+#homeScreen .mode .label-col .sub{font-size:12px;color:rgba(255,255,255,.95);font-weight:400;text-shadow:0 1px 2px rgba(0,0,0,.55);white-space:nowrap}
+#homeScreen .mode .chev{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+#homeScreen .mode .sym svg{filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+/* Subtle background texture (v133–v134): the letter tiles are gone —
+   just faint Duello-blue dots. v134: the texture moved to the body so
+   it covers EVERY page, not just Home — it is a body background-image,
+   so it sits behind all content on every screen, from the very top
+   (viewport-fit=cover + safe-area padding, right up past the Dynamic
+   Island) to the bottom, under the tab bar. Blue-only, faint, so it
+   never fights the buttons or the board. */
+/* ---------- v134: bot selector mirrors the home page ---------- */
+/* Same layout as #homeScreen: the logo at the top (same 100% size
+   as home and the opponent searcher, v154), the two buttons
+   filling the screen as full-height cards (same gap, same top
+   placement under the logo), Back below them. */
+#botScreen{position:relative;display:flex;flex-direction:column;height:100dvh;height:100svh;min-height:100svh;padding-bottom:128px}
+#botScreen .logo-img.home-logo{width:72%;position:relative;z-index:1}
+#botScreen .bot-options{flex:1;display:flex;flex-direction:column;gap:28px;margin-top:0;position:relative;z-index:1;justify-content:center}
+/* v146: bot buttons are the same fixed 100px as the home buttons — the
+   v137 calc (matching the old flex:1 home height) is gone, both now
+   match by the same number. v148: 92px / 28px, same as home. */
+#botScreen .bot-opt{flex:0 1 92px;height:auto;min-height:88px;font-size:22px}
+/* v146: the v137 calc is gone — home and bot buttons are both a fixed
+   100px now, so they match by the same number instead of arithmetic.
+   (History: the v137 percentage basis `calc((100% - 64.4px)/4)` silently
+   collapsed to the 88px min-height until v139 gave #botScreen a definite
+   height:100svh — a percentage flex-basis needs a definite parent height
+   to resolve. Keep that height on #botScreen.) */
+#botScreen .bot-opt .sym svg{width:48px;height:48px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+#botScreen .bot-opt .label-col .label{font-weight:700;text-shadow:0 2px 3px rgba(0,0,0,.45);white-space:nowrap}
+#botScreen .bot-opt .label-col .sub{font-size:12px;color:rgba(255,255,255,.95);text-shadow:0 1px 2px rgba(0,0,0,.55);white-space:nowrap}
+#botScreen .bot-opt .chev{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+/* Bot buttons in the Home Screen style: colorful gradients, muted
+   like the home buttons (v134, ~22% toward grey). Doppelgänger gets
+   the orange base (brand #ff8d03), Fishstick the red base (brand
+   #ff1303). Faint white textures overlay each gradient. */
+#competitiveBtn{background:radial-gradient(rgba(255,255,255,.07) 1.5px,transparent 1.5px),linear-gradient(180deg,rgba(227,138,30,.8) 0%,rgba(197,118,28,.8) 100%);background-size:16px 16px,100% 100%;border-color:#ac661c;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 0 #88541c}
+#fishstickBtn{background:repeating-linear-gradient(115deg,rgba(255,255,255,.05) 0 6px,transparent 6px 14px),linear-gradient(180deg,rgba(227,43,30,.8) 0%,rgba(168,39,30,.8) 100%);border-color:#8a1e15;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 0 #671410}
+/* Offline grey-out must win over the gradients (same specificity, later in file). */
+#homeScreen .mode.greyed{background:linear-gradient(180deg,#404552 0%,#2b303c 100%);color:#b3b2b1;border-color:#3c424e;box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 8px 0 #1e222b;opacity:.55}
+#homeScreen .mode.greyed .chev{color:#b3b2b1}
+/* Daily Puzzle modal: tiles reuse the real tile design. */
+/* v154: the status is the base .status now, exactly like the
+   game's — same height, same margins, same 15px text. The base
+   rule is already a fixed height for a one-line message
+   (min-height 22px + 16px padding), so the deck still never moves
+   when the text changes; the v150 fixed 35px was 3px shorter than
+   the game's and sat 8px lower, which moved the deck off the
+   game's position. */
+
+/* ---------- v141: profile settings pass ---------- */
+/* Gear top = pfp top: the pfp starts 8px below the screen's top
+   padding (its .profile-top padding), so the gear sits 8px lower
+   than the v135 pin (which matched the screen padding itself). */
+.gear-btn{top:calc(28px + env(safe-area-inset-top) + 8px)}
+/* The push section now lives inside the Edit Profile form, so its
+   top margin must not leave a gap on web, where the row is hidden:
+   the margin rides on the row itself (hidden = no space). */
+.settings-section{margin-top:0}
+.setting-row{margin-top:12px}
+/* Delete confirm: the two buttons stack full-width so both are
+   exactly the same size with their labels on one line ("Yes, delete
+   my account" wraps at half width). Keep is solid Duello blue with
+   black text; Delete is a red border on a transparent background
+   with red text. Scoped to the confirm row so the form's Cancel and
+   the code step's Back keep the standard outline-blue cancel. */
+.edit-actions.stacked{flex-direction:column}
+.edit-actions.stacked .btn{flex:none;width:100%;margin-top:0}
+#editDeleteActions .btn.cancel{background:#03eaff;color:#1a1d24;border:2px solid #03eaff}
+#editDeleteActions .btn.danger{background:transparent;color:#ff1303;border:2px solid #ff1303}
+#editDeleteCode{margin-top:12px}
+
+/* ---------- v142: Daily Puzzle is a 10x10 board puzzle ---------- */
+/* v143: the puzzle screen is the real game board — same shell, same
+   .board/.cell/.tile, same .status line, same .rack deck, same
+   .controls row. Placed tiles use the game's .tile.pending (gold
+   outline); the rack renders exactly like the game's (used tiles
+   become .tile.empty placeholders, selected gets the gold outline).
+   Only the strength bar and the title/date header are
+   puzzle-specific. */
+/* v150: the screen used to have a DEFINITE height (100svh), not
+   min-height, and the board shrank to fit — v154 removed both, so
+   the screen is min-height like the game's: on a short viewport it
+   grows past the fold and scrolls, exactly like the real game
+   (the v150 shrink crushed the status line to its 22px floor at
+   375x667 and moved the deck/buttons off the game's position). */
+#puzzleBoardScreen{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;min-height:100svh;padding:calc(4px + env(safe-area-inset-top)) 10px calc(12px + env(safe-area-inset-bottom))}
+/* v154: the board sits in flow exactly like the game's — no flex
+   centring, no container-query shrink. The v150 shrink kept the
+   buttons on screen on short viewports, but it moved the board off
+   the game's position; Jeff wants the buttons, deck, status line
+   and board in the exact same place as the real game, and the game
+   screen's board is a fixed square too, so the puzzle matches it
+   (same short-screen overflow as the game). The rack's
+   margin-top:auto below is what anchors the deck + buttons to the
+   bottom, like #gameScreen #rack. */
+#puzzleBoardScreen .board-wrap{position:relative;width:100%}
+#puzzleBoard{width:100%;aspect-ratio:1}
+#puzzleBoardScreen #puzzleRack{margin-top:auto}
+#puzzleBoardScreen>.controls{margin-bottom:40px}
+/* v152: the 7-day week strip above the board — one column per day,
+   weekday letter over a flame; solid orange for a solved day, grey
+   for a missed one. Today is the right-most column. */
+.puzzle-week{display:flex;justify-content:space-between;max-width:280px;margin:19px auto 0}
+.puzzle-week .day{display:flex;flex-direction:column;align-items:center;gap:2px;width:32px}
+.puzzle-week .day .letter{font-size:11px;color:#b3b2b1;font-weight:700}
+.puzzle-week .day.today .letter{color:#e8ecf1}
+.puzzle-week .day .flame{font-size:16px;line-height:1}
+.puzzle-week .day.missed .flame{filter:grayscale(1);opacity:.4}
+/* v152: confetti that rains on a puzzle solve — the container covers
+   the puzzle screen and ignores taps; pieces fall from the top and
+   are removed once the animation ends. */
+.puzzle-confetti{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:60}
+.puzzle-confetti .confetti-piece{position:absolute;top:-14px;border-radius:2px;animation:confetti-fall linear forwards}
+@keyframes confetti-fall{to{transform:translateY(110vh) rotate(720deg);opacity:.85}}
+.puzzle-board-title{font-size:22px;font-weight:800;margin-top:20px}
+.puzzle-board-date{color:#b3b2b1;font-size:13px;margin-top:2px}
+#puzzleBoard .cell.fixed-tile{cursor:default}
+/* v154: the strength dial sits above the board (below the week
+   strip) and shows at all times — no "Move strength x%" text any
+   more. The percentage rides in a white circle at the end of the
+   coloured fill (black Arial text, like the game's numbers); the
+   knob is positioned by JS and clamped to the track ends. The block
+   is a fixed 30px tall so the knob's overhang never moves the
+   board. */
+.puzzle-strength{height:30px;margin:12px 0;display:flex;align-items:center}
+.puzzle-strength-track{position:relative;flex:1;height:12px;border-radius:6px;background:#262a33}
+.puzzle-strength-fill{height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,#03eaff,#1cff03);transition:width .35s ease}
+.puzzle-strength-knob{position:absolute;top:50%;left:15px;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;background:#fff;color:#1a1d24;display:flex;align-items:center;justify-content:center;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;transition:left .35s ease}
+#puzzleBoardShareBtn{background:#03eaff;color:#1a1d24}
+
+/* v147: Apple-style settings — grouped rows in rounded cards, label
+   left, grey value + chevron right, hairline separators. The screen's
+   own 16px side padding provides the card inset. */
+.settings-group{background:#262a33;border-radius:16px;margin:0 0 20px;overflow:hidden;text-align:left}
+.settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;background:none;border:0;padding:13px 16px;font-size:17px;color:#fff;text-align:left;cursor:pointer;font-family:inherit}
+.settings-row + .settings-row{border-top:1px solid rgba(255,255,255,.09)}
+.settings-label{flex:0 0 auto}
+.settings-value{display:flex;align-items:center;gap:8px;color:#b3b2b1;min-width:0}
+.settings-val{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.settings-chev{color:#6e6e73;font-size:20px;line-height:1}
+.settings-row-danger .settings-label{color:#ff453a}
+.settings-pfp{width:32px;height:32px;border-radius:50%;overflow:hidden;display:inline-flex;flex:0 0 auto;background:#1a1d24}
+.settings-pfp img{width:100%;height:100%;object-fit:cover}
+/* v154: the check always occupies the same 20px slot, checked or
+   not — the row height no longer changes when the check appears. */
+.settings-check{flex:0 0 20px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;color:#03eaff;font-size:18px;font-weight:700}
+#fieldInput{flex:1;background:none;border:0;color:#fff;font-size:16px;font-family:inherit;outline:none;min-width:0;padding:0}
+/* v151: the change-password fields and criteria bullets sit inside
+   the grey box with a 16px inset, not flush against its edges. */
+#profilePasswordScreen .settings-group{padding:10px 16px}
+/* v151: the in-app Privacy Policy (fetched from /privacy.html) —
+   same dark card, blue headings and links as the standalone page,
+   with the title in the same .auth-heading size. */
+.privacy-body{text-align:left;line-height:1.6}
+.privacy-body h1{color:#03eaff;font-size:24px;font-weight:800;margin:6px 0 16px}
+.privacy-body h2{color:#03eaff;font-size:19px;margin-top:28px}
+.privacy-body a{color:#03eaff}
+.privacy-body .small{color:#b3b2b1}
+
+/* ---------- v153 ---------- */
+/* Privacy: the top back button is the standard back button, but
+   left-justified (not centered like the other back pills) with
+   more room below it before the policy text starts. */
+#profilePrivacyScreen #privacyBackBtn{margin:22px 0 20px}
+/* v155: the bottom back button is left-justified too (was centered
+   by the .back-pill auto margins, like the top one was before v153). */
+#profilePrivacyScreen #privacyBottomBackBtn{margin:22px 0 0}
+/* v154: the strip is tighter than the full board width (was 100% in
+   v153) and sits closer to the board, with bigger flames (24px in
+   renderPuzzleWeekStrip). The flame is the home page's streak SVG,
+   so the span needs no font size. */
+.puzzle-week{max-width:280px;width:100%;margin:19px auto 0}
+.puzzle-week .day{gap:4px}
+.puzzle-week .day .flame svg{display:block}
+
+/* ---------- v154 ---------- */
+/* Field editor: the input row gives the text more room (12px sides
+   instead of 16px) so a long email fits — Jeff's
+   jeffsmarquis@gmail.com was clipped at the left edge on his phone
+   (the input is 16px type now, and openFieldEditor resets its
+   scroll after focusing). */
+#profileFieldScreen .settings-row{padding-left:12px;padding-right:12px}
+/* Opponent search: the dots, the "Searching for opponent…" line and
+   Cancel sit in the middle of the space below the logo instead of
+   60px under it. The screen's bottom padding is 12px, not the
+   .screen default 90px (which reserves room for the tab bar — hidden
+   on this screen): 12px matches the logo's bottom margin, so the
+   box's top and bottom insets are equal and its centre is the centre
+   of the space below the logo. */
+#searchingScreen{position:relative;display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;min-height:100svh;padding-bottom:12px}
+#searchingScreen .searching-box{position:absolute;inset:0;flex:none;justify-content:center;margin-top:0}
+/* The puzzle's top section (title, date, week strip, strength dial)
+   never shrinks: on a short screen the flex container overflows and
+   flex-shrink would otherwise collapse it (the strength dial went
+   from 30px to 12px at 375x667), which moved the board off the
+   game's position. The board, status, deck and buttons below it
+   absorb the overflow instead, the same way the game screen does. */
+#puzzleBoardScreen > .puzzle-board-title,
+#puzzleBoardScreen > .puzzle-board-date,
+#puzzleBoardScreen > .puzzle-week,
+#puzzleBoardScreen > .puzzle-strength{flex-shrink:0}
