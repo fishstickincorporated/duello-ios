@@ -3,6 +3,8 @@
 	"appName": "Duello",
 	"webDir": "www",
 	"packageClassList": [
+		"AppPlugin",
+		"HapticsPlugin",
 		"PushNotificationsPlugin"
 	]
 }
