@@ -22,7 +22,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     // iPad keeps all four orientations; the closed Duo (a phone)
     // stays portrait-only. Must be verified in the sim: open the
     // Duo, rotate to landscape, and confirm the app stays portrait.
-    func application(_ application: UIApplication, supportedInterfaceOrientationsForWindow window: UIWindow?) -> UIInterfaceOrientationMask {
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         for scene in application.connectedScenes {
             guard let windowScene = scene as? UIWindowScene else { continue }
             let size = windowScene.screen.bounds.size
