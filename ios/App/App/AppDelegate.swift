@@ -11,6 +11,33 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    // v207 (Jeff, Nov 27, 2026): when the Duo is open, the app
+    // always displays portrait — open landscape is out (supersedes
+    // the Nov 25 "play closed, open landscape, AND open portrait"
+    // requirement). The Duo inner display is 669x951pt; no iPad
+    // has that size, so the check is unambiguous. Capacitor's
+    // CAPBridgeViewController reads supported orientations from the
+    // iPhone plist key only, so the app delegate is the one place
+    // that can narrow the iPad mask for a single screen size.
+    // iPad keeps all four orientations; the closed Duo (a phone)
+    // stays portrait-only. Must be verified in the sim: open the
+    // Duo, rotate to landscape, and confirm the app stays portrait.
+    func application(_ application: UIApplication, supportedInterfaceOrientationsForWindow window: UIWindow?) -> UIInterfaceOrientationMask {
+        for scene in application.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            let size = windowScene.screen.bounds.size
+            let longSide = max(size.width, size.height)
+            let shortSide = min(size.width, size.height)
+            if abs(longSide - 951) <= 1 && abs(shortSide - 669) <= 1 {
+                return .portrait
+            }
+        }
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            return .all
+        }
+        return .portrait
+    }
+
     func applicationWillResignActive(_ application: UIApplication) {
         // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
         // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.

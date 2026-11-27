@@ -67,6 +67,14 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<!-- v207 (Jeff, Nov 27, 2026): hide the status bar (wifi/clock)
+	     on every screen, from launch. View-controller-based
+	     appearance is OFF so the plist's UIStatusBarHidden wins
+	     over Capacitor's CAPBridgeViewController preference. The
+	     --sat floors in style.css keep the iPhone 16's top offset
+	     exactly as it was with the bar visible. -->
+	<false/>
+	<key>UIStatusBarHidden</key>
 	<true/>
 </dict>
 </plist>
