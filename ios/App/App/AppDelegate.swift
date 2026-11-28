@@ -11,24 +11,41 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
-    // v207 (Jeff, Nov 27, 2026): when the Duo is open, the app
-    // always displays portrait — open landscape is out (supersedes
-    // the Nov 25 "play closed, open landscape, AND open portrait"
-    // requirement). The Duo inner display is 669x951pt; no iPad
-    // has that size, so the check is unambiguous. Capacitor's
-    // CAPBridgeViewController reads supported orientations from the
-    // iPhone plist key only, so the app delegate is the one place
-    // that can narrow the iPad mask for a single screen size.
-    // iPad keeps all four orientations; the closed Duo (a phone)
-    // stays portrait-only. Must be verified in the sim: open the
-    // Duo, rotate to landscape, and confirm the app stays portrait.
+    // v208 (Jeff, Nov 27, 2026): the open Duo MUST stay portrait.
+    // v207's check (exact 669x951 ±1pt) MISSED — Jeff's Nov 27
+    // screenshot showed the open Duo rendering in LANDSCAPE. The
+    // likely cause: the Duo reports the .pad idiom (a foldable's
+    // inner display) and/or a screen size a few points off 669x951,
+    // so the size check failed and the .pad idiom hit the .all
+    // fallback; the iPad plist key (UISupportedInterfaceOrientations
+    // ~ipad) also lists all four orientations, so once the delegate
+    // returned .all, landscape was fully allowed. The robust fix
+    // discriminates by SIZE, not idiom: the Duo inner display is the
+    // only Apple display with a short side under ~700pt (669); every
+    // iPad is 744pt or wider on its short side (iPad mini 744,
+    // Air/Pro 820+). So any screen with short side <= 700pt and long
+    // side <= 1000pt is a phone/foldable and stays portrait-only,
+    // whatever idiom it reports; only a genuinely iPad-sized screen
+    // (short side >= 744) gets all four. The window's own screen is
+    // checked first (it is the screen these orientations are for),
+    // then every connected scene's screen, then the main screen as a
+    // last resort. The check reads SCREEN bounds, not window bounds,
+    // so an iPad Split View window still reports the full iPad
+    // screen and keeps all four. iPhone stays portrait-only.
+    // Must be verified in the sim: open the Duo, rotate to
+    // landscape, and confirm the app stays portrait.
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        var sizes: [CGSize] = []
+        if let s = window?.screen.bounds.size { sizes.append(s) }
         for scene in application.connectedScenes {
             guard let windowScene = scene as? UIWindowScene else { continue }
-            let size = windowScene.screen.bounds.size
-            let longSide = max(size.width, size.height)
+            sizes.append(windowScene.screen.bounds.size)
+        }
+        if sizes.isEmpty { sizes.append(UIScreen.main.bounds.size) }
+        for size in sizes {
             let shortSide = min(size.width, size.height)
-            if abs(longSide - 951) <= 1 && abs(shortSide - 669) <= 1 {
+            let longSide = max(size.width, size.height)
+            if shortSide <= 700 && longSide <= 1000 {
                 return .portrait
             }
         }
